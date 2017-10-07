@@ -1,6 +1,8 @@
 # SavvySuite
 Suite of tools for analysing off-target reads to find CNVs, homozygous regions, and shared haplotypes
 
+This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
+
 ## Compiling
 This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. Compiling the code is then done by:
 ```
@@ -42,14 +44,20 @@ The output cnv_list.csv contains a tab-separated list of detected CNVs. The colu
 
 The log_messages.txt file contains log messages, and also a summary of each sample. Each sample has a line containing the following columns:
 1. Noisyness of the sample before excluding known CNVs
-2. Noisyness of the sample after excluding known CNVs (the CNV calling is performed twice, as the calling depends on the noisyness of the sample). This figure should be below 0.2 for good results.
+2. Noisyness of the sample after excluding known CNVs (the CNV calling is performed twice, as the calling depends on the noisyness of the sample). This figure should be below 0.2 for good results. If too many of the samples have a high noisyness, then increase the chunk size parameter (-d <size>).
 3. Number of deletions found in the sample
 4. Number of duplications found in the sample
 5. The filename containing the sample summary.
 
-###SavvyHomozygosity
+### SavvyHomozygosity
 This software analyses the off-target reads to determine homozygous regions of the genome for a single sample. It can be run as follows:
 ```
 java -Xmx5g SavvyHomozygosity whole_genome.vcf sample.bam >sample.bed
 ```
-The whole_genome.vcf file must contain whole-genome sequencing data with many (a few hundred would be appropriate) samples, in order to calculate population linkage disequilibrium. The sample.bam contains the sample targeted sequencing data. The software produces a BED file containing homozygous regions.
+The whole_genome.vcf file must contain whole-genome sequencing data with many (a few hundred would be appropriate) samples, in order to calculate population linkage disequilibrium. The sample.bam contains the sample targeted sequencing data. The software produces a BED file containing homozygous regions. The analysis requires at least a million off-target reads, and preferably more, so a sample with three million reads and about 50% off-target is about right. The software searches for read pairs, so the amount of detail that can be extracted (and consequently the time taken) is proportional to the square of the number of off-target reads. Samples with too few reads do not produce a valid result.
+
+### SavvySharedHaplotypes
+This software analyses the off-target reads from two samples to determine areas with homozygous shared haplotypes, using the same methodology as SavvyHomozygosity. It can be run as follows:
+```
+java -Xmx5g SavvySharedHomozygosity whole_genome.vcf sample1.bam sample2.bam >shared.bed
+```

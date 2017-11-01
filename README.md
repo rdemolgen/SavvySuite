@@ -3,12 +3,30 @@ Suite of tools for analysing off-target reads to find CNVs, homozygous regions, 
 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
 
+## Running Java
+This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. All operations require this GATK jar and the SavvySuite java to be in the Java classpath, in order for Java to find it.
+
+This can be done in two ways. The first option is to set the CLASSPATH environment variable:
+```
+export CLASSPATH=/path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory
+```
+The second option is to specify the "-cp" option every time you run java, like this:
+```
+java -cp /path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory blah blah blah
+```
+For all subsequent code fragments, where "java" or "javac" is specified, it is assumed that the classpath is correctly configured as specified above, either by adding the "-cp" option or using the CLASSPATH environment variable.
+
+If you have a large server, it is also sensible to add the -XX:ParallelGCThreads=2 -XX:ConcGCThreads=2 options to java, to prevent it creating too many garbage collection threads. This is a small performance enhancement, and is done like this:
+```
+java -XX:ParallelGCThreads=2 -XX:ConcGCThreads=2 blah blah blah
+```
+
 ## Compiling
-This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. Compiling the code is then done by:
+Compiling the code is then done by:
 ```
-javac -cp GenomeAnalysisTK.jar:. *.java
+javac *.java
 ```
-For all subsequent examples, it is assumed that both the GenomeAnalysisTK.jar and the compiled *.class files are in the classpath. If you have a large server, it is also sensible to add the -XX:ParallelGCThreads=2 -XX:ConcGCThreads=2 options to java, to prevent it creating too many garbage collection threads.
+
 ## Usage
 This suite contains three separate tools for analysing off-target reads.
 ### SavvyCNV

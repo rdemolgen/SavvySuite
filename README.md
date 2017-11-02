@@ -10,7 +10,7 @@ This can be done in two ways. The first option is to set the CLASSPATH environme
 ```
 export CLASSPATH=/path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory
 ```
-The second option is to specify the "-cp" option every time you run java, like this:
+The ":" character separates the two parts of this path, to specify that code can be found in the two places. The second option is to specify the "-cp" option every time you run java, like this:
 ```
 java -cp /path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory blah blah blah
 ```
@@ -26,6 +26,7 @@ Compiling the code is then done by:
 ```
 javac *.java
 ```
+in the SavvySuite directory.
 
 ## Usage
 This suite contains three separate tools for analysing off-target reads.

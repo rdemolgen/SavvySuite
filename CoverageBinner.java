@@ -16,6 +16,7 @@ public class CoverageBinner
 	public static void main(String[] args) throws Exception {
 		// Single argument is the name of the BAM file. The vector of integers will be written to the stdout.
 		SamReaderFactory factory = SamReaderFactory.makeDefault();
+		factory.validationStringency(ValidationStringency.LENIENT);
 		SamReader in = factory.open(new File(args[0]));
 		SAMRecordIterator iter = in.iterator();
 		LinkedHashMap<String, int[]> vectors = new LinkedHashMap<String, int[]>();

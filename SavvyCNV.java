@@ -69,7 +69,7 @@ public class SavvyCNV
 		for (int i = 0; i < samples.size(); i++) {
 			System.err.println("Reading " + samples.get(i));
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(samples.get(i)));
-			LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
+			@SuppressWarnings("unchecked") LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
 			for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
 				String chr = entry.getKey();
 				int[] toAdd = entry.getValue();

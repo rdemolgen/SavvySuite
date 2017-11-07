@@ -49,12 +49,13 @@ public class SavvyHomozygosity
 		String currentChr = "";
 		MultiViterbi viterbi = null;
 		for (VariantContext context : vcf) {
-			if (!(currentChr.equals(context.getChr()))) {
+			@SuppressWarnings("deprecation") String contextChr = context.getChr();
+			if (!(currentChr.equals(contextChr))) {
 				if (viterbi != null) {
 					viterbi.finish();
 				}
 				storedVariants = new TreeMap<Integer, VariantContext>();
-				currentChr = context.getChr();
+				currentChr = contextChr;
 				storedBases = new TreeMap<Integer, Boolean>();
 				viterbi = new MultiViterbi(currentChr);
 			}
@@ -73,7 +74,7 @@ public class SavvyHomozygosity
 					an += 2;
 				}
 				if (ac * 4 > an) {
-					int[] bases = bamReader.getCounts(context.getChr(), context.getStart());
+					int[] bases = bamReader.getCounts(contextChr, context.getStart());
 					int wildCount = bases[baseIndex(context.getAlleles().get(0).toString().charAt(0))];
 					int varCount = bases[baseIndex(context.getAlleles().get(1).toString().charAt(0))];
 					if (wildCount + varCount > 0) {

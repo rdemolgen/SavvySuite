@@ -43,12 +43,13 @@ public class SavvySharedHaplotypes
 		String currentChr = "";
 		Viterbi viterbi = null;
 		for (VariantContext context : vcf) {
-			if (!(currentChr.equals(context.getChr()))) {
+			@SuppressWarnings("deprecation") String contextChr = context.getChr();
+			if (!(currentChr.equals(contextChr))) {
 				if (viterbi != null) {
 					viterbi.finish();
 				}
 				storedVariants = new TreeMap<Integer, VariantContext>();
-				currentChr = context.getChr();
+				currentChr = contextChr;
 				storedBases = new TreeMap<Integer, Boolean>();
 				viterbi = new Viterbi(currentChr, 80.0);
 				if (bamReader2 != null) {
@@ -71,15 +72,15 @@ public class SavvySharedHaplotypes
 					an += 2;
 				}
 				if (ac * 4 > an) {
-					int[] bases = bamReader.getCounts(context.getChr(), context.getStart());
+					int[] bases = bamReader.getCounts(contextChr, context.getStart());
 					int[] bases2 = bases;
 					if (bamReader2 != null) {
-						bases2 = bamReader2.getCounts(context.getChr(), context.getStart());
+						bases2 = bamReader2.getCounts(contextChr, context.getStart());
 					}
 					int wildCount = bases[baseIndex(context.getAlleles().get(0).toString().charAt(0))];
 					int varCount = bases[baseIndex(context.getAlleles().get(1).toString().charAt(0))];
 					if (wildCount + varCount > 0) {
-						//System.out.println(context.getChr() + ":" + context.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + context.getAlleles() + "\t" + wildCount + "\t" + varCount);
+						//System.out.println(contextChr + ":" + context.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + context.getAlleles() + "\t" + wildCount + "\t" + varCount);
 						if ((wildCount == 0) || (varCount == 0)) {
 							if ((bamReader2 == null) && (wildCount + varCount > 2)) {
 								viterbi.addSignal(new ViterbiSignal(context.getStart(), 1.1));
@@ -182,10 +183,10 @@ public class SavvySharedHaplotypes
 				double d = pab - pa * pb;
 				double dmin = d < 0.0 ? Math.max(-pa * pb, -(1.0 - pa) * (1.0 - pb)) : Math.min(pa * (1.0 - pb), pb * (1.0 - pa));
 				double dprime = d / dmin;
-				//System.out.println(context.getChr() + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime);
+				//System.out.println(contextChr + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime);
 				if ((pa > 0.0) && (pb > 0.0) && (pa < 1.0) && (pb < 1.0)) {
 					double rsquared = (d / Math.sqrt(pa * (1.0 - pa) * pb * (1.0 - pb)));
-					//System.out.println(context.getChr() + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime + "\t" + rsquared + "\t[" + grid[0] + "," + grid[1] + "," + grid[2] + "," + grid[3] + "," + grid[4] + "," + grid[5] + "," + grid[6] + "," + grid[7] + "," + grid[8] + "]\t" + ((thisBase == otherBase) ? rsquared : -rsquared));
+					//System.out.println(contextChr + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime + "\t" + rsquared + "\t[" + grid[0] + "," + grid[1] + "," + grid[2] + "," + grid[3] + "," + grid[4] + "," + grid[5] + "," + grid[6] + "," + grid[7] + "," + grid[8] + "]\t" + ((thisBase == otherBase) ? rsquared : -rsquared));
 					double rsquaredMinus = (thisBase == otherBase) ? rsquared : -rsquared;
 					if (rsquaredMinus < -0.8) {
 						viterbi.addSignal(new ViterbiSignal((context.getStart() + storedEntry.getKey()) / 2, (rsquaredMinus + 0.8) * 5.0 * negativeMultiplier));

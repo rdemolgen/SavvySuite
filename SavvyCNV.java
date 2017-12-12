@@ -30,11 +30,15 @@ public class SavvyCNV
 		double cutoffV = 5.25;
 		boolean graph = false;
 		boolean allGraphs = false;
-		boolean build38 = false;
+		String cytoBands = null;
 		double transitionProb = 0.00001;
 		double minProb = 0.00000000001;
 		boolean dump = false;
+		boolean errorModel = false;
 		boolean mosaic = false;
+		String graphSize = "16in, 9in";
+		double fontScale = 1.0;
+		int svsBlanked = 5;
 		for (int i = 0; i < args.length; i++) {
 			if ("-d".equals(args[i])) {
 				i++;
@@ -50,12 +54,24 @@ public class SavvyCNV
 			} else if ("-a".equals(args[i])) {
 				allGraphs = true;
 				graph = true;
-			} else if ("-38".equals(args[i])) {
-				build38 = true;
+			} else if ("-cytoBands".equals(args[i])) {
+				i++;
+				cytoBands = args[i];
 			} else if ("-dump".equals(args[i])) {
 				dump = true;
+			} else if ("-errorModel".equals(args[i])) {
+				errorModel = true;
 			} else if ("-mosaic".equals(args[i])) {
 				mosaic = true;
+			} else if ("-size".equals(args[i])) {
+				i++;
+				graphSize = args[i];
+			} else if ("-fontscale".equals(args[i])) {
+				i++;
+				fontScale = Double.parseDouble(args[i]);
+			} else if ("-sv".equals(args[i])) {
+				i++;
+				svsBlanked = Integer.parseInt(args[i]);
 			} else {
 				samples.add(args[i]);
 			}
@@ -63,6 +79,14 @@ public class SavvyCNV
 		double logTransProb = log(transitionProb);
 		//System.err.println("Transition probability " + logTransProb);
 		System.err.println("Processing " + samples.size() + " samples");
+		if (svsBlanked >= samples.size()) {
+			System.err.println(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
+			System.err.println("Cannot process samples.");
+			System.exit(1);
+		}
+		if (svsBlanked * 2 > samples.size()) {
+			System.err.println(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
+		}
 
 		long[] totals = new long[samples.size()];
 		Map<String, long[][]> arraysMap = new TreeMap<String, long[][]>();
@@ -186,58 +210,6 @@ public class SavvyCNV
 		long time2 = System.currentTimeMillis();
 		System.err.println("Performed SVD in " + (time2 - time1) + "ms");
 		Jama.Matrix S = decomp.getS();
-		S.getArray()[0][0] = 0.0;
-		S.getArray()[1][1] = 0.0;
-		S.getArray()[2][2] = 0.0;
-		S.getArray()[3][3] = 0.0;
-		S.getArray()[4][4] = 0.0;
-		Jama.Matrix Aprime = decomp.getU().times(S).times(decomp.getV().transpose());
-		//Jama.Matrix Aprime = A;
-		double[][] aPrimeArray = Aprime.getArray();
-		if (dump) {
-			for (int o = 0; o < chunkChromosomes.size(); o++) {
-				String chunkChr = chunkChromosomes.get(o);
-				int start = chunkStarts.get(o);
-				System.out.print(chunkChr + "\t" + start);
-				for (int i = 0; i < samples.size(); i++) {
-					System.out.print("\t" + (Math.exp(aPrimeArray[o][i]) - 0.01));
-				}
-				System.out.println("");
-			}
-			System.exit(0);
-		}
-			
-		double scoreSum[] = new double[samples.size()];
-		double scoreSsum[] = new double[samples.size()];
-		int scoreCount[] = new int[samples.size()];
-		double posVariance[] = new double[aPrimeArray.length];
-		for (int o = 0; o < aPrimeArray.length; o++) {
-			// Calculate variance of the normalised corrected read depth at this position. Exclude some of the outliers (say 3% on each side).
-			double[] sortedDepths = new double[samples.size()];
-			for (int i = 0; i < samples.size(); i++) {
-				double val = Math.exp(aPrimeArray[o][i]) - 0.01;
-				sortedDepths[i] = val;
-			}
-			Arrays.sort(sortedDepths);
-			int count = 0;
-			double sum = 0.0;
-			double ssum = 0.0;
-			for (int i = samples.size() / 30; i < samples.size() - (samples.size() / 30); i++) {
-				double val = sortedDepths[i];
-				sum += val;
-				ssum += val * val;
-				count++;
-			}
-			posVariance[o] = (ssum - (sum * sum / count)) / count;
-			if (posVariance[o] < cutoff * cutoff) {
-				for (int i = 0; i < samples.size(); i++) {
-					double val = Math.exp(aPrimeArray[o][i]) - 1.01;
-					scoreSum[i] += val;
-					scoreSsum[i] += val * val;
-					scoreCount[i]++;
-				}
-			}
-		}
 		Process gnuplot = null;
 		SplitPrintStream pipe = null;
 		if (graph) {
@@ -248,12 +220,22 @@ public class SavvyCNV
 			pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 			gnuplot = pb.start();
 			PrintStream pipe1 = new PrintStream(gnuplot.getOutputStream());
-			PrintStream pipe2 = new PrintStream(new FileOutputStream(samples.get(0) + ".tempFile" + Math.random() + ".plot"));
+			String tempFileName = samples.get(0) + ".tempFile" + Math.random();
+			PrintStream pipe2 = new PrintStream(new FileOutputStream(tempFileName + ".plot"));
 			List<PrintStream> streams = new ArrayList<PrintStream>();
 			streams.add(pipe1);
 			streams.add(pipe2);
 			pipe = new SplitPrintStream(streams);
-			pipe.println("set terminal pdf noenhanced size 16in, 9in");
+			pipe.println("set terminal pdf noenhanced" + (fontScale == 1.0 ? "" : " fontscale " + fontScale) + " size " + graphSize);
+			PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SVs.csv"));
+			for (int i = 0; i < samples.size(); i++) {
+				svFile.println((i + 1) + "\t" + S.getArray()[i][i]);
+			}
+			svFile.flush();
+			svFile.close();
+			pipe.println("set output \"" + tempFileName + ".SVs.pdf\"");
+			pipe.println("plot '" + tempFileName + ".SVs.csv' using 1:2:($1 - 0.4):($1 + 0.4):(0):2 with boxxy fillstyle solid notitle");
+			pipe.flush();
 			pipe.println("yo(a) = (a > 13 && a <= 22 ? 27 - a : (a == 23 || a == 24 ? 14 : a))");
 			pipe.println("xo(a) = (a == 22 || a == 21 ? 200000000 : (a == 20 || a == 19 ? 180000000 : (a == 24 ? 170000000 : (a == 16 || a == 17 || a == 18 ? 160000000 : (a == 15 ? 150000000 : (a == 14 ? 140000000 : 0))))))");
 			pipe.println("set label \"Y\" at 166000000, 14 right");
@@ -290,7 +272,103 @@ public class SavvyCNV
 			pipe.println("min(a, b) = (a > b ? b : a)");
 			pipe.println("set ytics (\"1\" 1, \"2\" 2, \"3\" 3, \"4\" 4, \"5\" 5, \"6\" 6, \"7\" 7, \"8\" 8, \"9\" 9, \"10\" 10, \"11\" 11, \"12\" 12, \"13\" 13, \"X\" 14)");
 			pipe.println("set xtics (\"0\" 0, \"10M\" 10000000, \"20M\" 20000000, \"30M\" 30000000, \"40M\" 40000000, \"50M\" 50000000, \"60M\" 60000000, \"70M\" 70000000, \"80M\" 80000000, \"90M\" 90000000, \"100M\" 100000000, \"110M\" 110000000, \"120M\" 120000000, \"130M\" 130000000, \"140M\" 140000000, \"150M\" 150000000, \"160M\" 160000000, \"170M\" 170000000, \"180M\" 180000000, \"190M\" 190000000, \"200M\" 200000000, \"210M\" 210000000, \"220M\" 220000000, \"230M\" 230000000, \"240M\" 240000000, \"250M\" 250000000)");
+			for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
+				svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_chunk.csv"));
+				boolean needBlankLine = false;
+				for (String chr : arraysMap.keySet()) {
+					if (needBlankLine) {
+						svFile.println("");
+						needBlankLine = false;
+					}
+					int lastStart = -1;
+					for (int o = 0; o < chunkChromosomes.size(); o++) {
+						String chunkChr = chunkChromosomes.get(o);
+						if (chr.equals(chunkChr)) {
+							int start = chunkStarts.get(o);
+							if (start > lastStart + 1) {
+								if (needBlankLine) {
+									svFile.println("");
+									needBlankLine = false;
+								}
+							}
+							double val = decomp.getU().getArray()[o][i];
+							svFile.println(chr + "\t" + (start * divider) + "\t" + val);
+							svFile.println(chr + "\t" + (start * divider + divider) + "\t" + val);
+							needBlankLine = true;
+							lastStart = start;
+						}
+					}
+				}
+				svFile.flush();
+				svFile.close();
+				svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_sample.csv"));
+				for (int o = 0; o < samples.size(); o++) {
+					svFile.println(o + "\t" + decomp.getV().getArray()[o][i]);
+				}
+				svFile.flush();
+				svFile.close();
+				pipe.println("set output \"" + tempFileName + ".SV_" + i + ".pdf");
+				pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
+			}
+			pipe.flush();
 		}
+		for (int i = 0; i < svsBlanked; i++) {
+			S.getArray()[i][i] = 0.0;
+		}
+		Jama.Matrix Aprime = decomp.getU().times(S).times(decomp.getV().transpose());
+		//Jama.Matrix Aprime = A;
+		double[][] aPrimeArray = Aprime.getArray();
+		if (dump) {
+			for (int o = 0; o < chunkChromosomes.size(); o++) {
+				String chunkChr = chunkChromosomes.get(o);
+				int start = chunkStarts.get(o);
+				System.out.print(chunkChr + "\t" + start);
+				for (int i = 0; i < samples.size(); i++) {
+					System.out.print("\t" + (Math.exp(aPrimeArray[o][i]) - 0.01));
+				}
+				System.out.println("");
+			}
+			System.exit(0);
+		}
+			
+		double scoreSum[] = new double[samples.size()];
+		double scoreSsum[] = new double[samples.size()];
+		int scoreCount[] = new int[samples.size()];
+		double posVariance[] = new double[aPrimeArray.length];
+		double totalPosVariance = 0.0;
+		int validChunks = 0;
+		for (int o = 0; o < aPrimeArray.length; o++) {
+			// Calculate variance of the normalised corrected read depth at this position. Exclude some of the outliers (say 3% on each side).
+			double[] sortedDepths = new double[samples.size()];
+			for (int i = 0; i < samples.size(); i++) {
+				double val = Math.exp(aPrimeArray[o][i]) - 0.01;
+				sortedDepths[i] = val;
+			}
+			Arrays.sort(sortedDepths);
+			int count = 0;
+			double sum = 0.0;
+			double ssum = 0.0;
+			for (int i = samples.size() / 30; i < samples.size() - (samples.size() / 30); i++) {
+				double val = sortedDepths[i];
+				sum += val;
+				ssum += val * val;
+				count++;
+			}
+			posVariance[o] = (ssum - (sum * sum / count)) / count;
+			if (posVariance[o] < cutoff * cutoff) {
+				for (int i = 0; i < samples.size(); i++) {
+					double val = Math.exp(aPrimeArray[o][i]) - 1.01;
+					scoreSum[i] += val;
+					scoreSsum[i] += val * val;
+					scoreCount[i]++;
+				}
+				totalPosVariance += posVariance[o];
+				validChunks++;
+			}
+		}
+		System.err.println("Number of low-noise genome chunks: " + validChunks);
+		totalPosVariance = totalPosVariance / validChunks;
+		System.err.println("Average noise: " + Math.sqrt(totalPosVariance));
 		for (int sampleNo = 0; sampleNo < samples.size(); sampleNo++) {
 			String tempFileName = samples.get(sampleNo) + ".tempFile" + Math.random();
 			PrintWriter depthFile = null;
@@ -304,7 +382,7 @@ public class SavvyCNV
 			// We need to do an initial CNV detection, remove these from consideration, and recalculate.
 			// Also, posVariance[i] contains the variance for position number i.
 			// Run viterbi to get initial CNV calls
-			List<State> cnvs = viterbi(arraysMap, false, null, null, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, sampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic);
+			List<State> cnvs = viterbi(arraysMap, false, null, null, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, sampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance);
 			// Now re-calculate sampleVariance, without those parts that have a detected CNV.
 			double sum = 0.0;
 			double ssum = 0.0;
@@ -328,33 +406,52 @@ public class SavvyCNV
 				}
 			}
 			double newSampleVariance = (ssum - (sum * sum / count)) / count;
-			cnvs = viterbi(arraysMap, graph, depthFile, cnvFile, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, newSampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic);
-			int delCount = 0;
-			int dupCount = 0;
-			for (State evalState : cnvs) {
-				int blockLength = (int) ((evalState.getEnd() - evalState.getStart()) / divider);
-				if (evalState.getState() == 1) {
-					out.println(evalState.getChr() + "\t" + evalState.getStart() + "\t" + evalState.getEnd() + "\tDeletion\t" + evalState.getCount() + "\t" + blockLength + "\t" + evalState.getProb() + "\t" + (evalState.getProb() / blockLength) + "\t" + evalState.getProportion() + "\t" + samples.get(sampleNo));
-					delCount++;
-				} else if (evalState.getState() == 3) {
-					out.println(evalState.getChr() + "\t" + evalState.getStart() + "\t" + evalState.getEnd() + "\tDuplication\t" + evalState.getCount() + "\t" + blockLength + "\t" + evalState.getProb() + "\t" + (evalState.getProb() / blockLength) + "\t" + evalState.getProportion() + "\t" + samples.get(sampleNo));
-					dupCount++;
+			if (errorModel) {
+				for (int o = 0; o < aPrimeArray.length; o++) {
+					double val = Math.exp(aPrimeArray[o][sampleNo]) - 1.01;
+					if (posVariance[o] < cutoff * cutoff) {
+						String chr = chunkChromosomes.get(o);
+						int start = chunkStarts.get(o) * divider;
+						boolean notCovered = true;
+						for (State cnv : cnvs) {
+							if (chr.equals(cnv.getChr()) && (start >= cnv.getStart()) && (start < cnv.getEnd())) {
+								notCovered = false;
+							}
+						}
+						if (notCovered) {
+							System.out.println(Math.sqrt(newSampleVariance) + "\t" + Math.sqrt(posVariance[o]) + "\t" + val);
+						}
+					}
 				}
-			}
-			System.err.println(Math.sqrt(sampleVariance) + "\t" + Math.sqrt(newSampleVariance) + "\t" + delCount + "\t" + dupCount + "\t" + samples.get(sampleNo));
-			if (graph) {
-				depthFile.flush();
-				depthFile.close();
-				depthFile = null;
-				cnvFile.println("200\t0\t0\t0\t1");
-				cnvFile.println("200\t0\t0\t0\t3");
-				cnvFile.flush();
-				cnvFile.close();
-				cnvFile = null;
-				if ((delCount > 0) || (dupCount > 0) || allGraphs) {
-					pipe.println("set output \"" + samples.get(sampleNo) + "." + divider + ".cnvs.pdf");
-					pipe.println("plot [* to *] [0.5 to 14.55] '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" </mnt/Data1/resources/cytobands/hg" + (build38 ? "38" : "19") + "_cytoBand.txt | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"1$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) + 0.4 - $4 * 0.6):(yo($1) + 0.4) with boxxy fillstyle solid noborder linecolor rgb \"#FFAAAA\" title \"" + delCount + " Deletion" + (delCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"3$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) - 0.4 + $4 * 0.6) with boxxy fillstyle solid noborder linecolor rgb \"#8888FF\" title \"" + dupCount + " Duplication" + (dupCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".readDepth' using ($2 + xo($1)):(yo($1) - min($4, 1.25) * 0.4):(yo($1) + min($4, 1.25) * 0.4) with filledcurves linecolor rgb \"#33AA33\" notitle, '' using ($2 + xo($1)):(yo($1) + (min($3, 2.25) - 1.0) * 0.4) with lines linewidth 2 linecolor rgb \"#000000\" title \"" + samples.get(sampleNo) + "\"");
-					pipe.flush();
+			} else {
+				cnvs = viterbi(arraysMap, graph, depthFile, cnvFile, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, newSampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance);
+				int delCount = 0;
+				int dupCount = 0;
+				for (State evalState : cnvs) {
+					int blockLength = (int) ((evalState.getEnd() - evalState.getStart()) / divider);
+					if (evalState.getState() == 1) {
+						out.println(evalState.getChr() + "\t" + evalState.getStart() + "\t" + evalState.getEnd() + "\tDeletion\t" + evalState.getCount() + "\t" + blockLength + "\t" + evalState.getProb() + "\t" + (evalState.getProb() / blockLength) + "\t" + evalState.getProportion() + "\t" + samples.get(sampleNo));
+						delCount++;
+					} else if (evalState.getState() == 3) {
+						out.println(evalState.getChr() + "\t" + evalState.getStart() + "\t" + evalState.getEnd() + "\tDuplication\t" + evalState.getCount() + "\t" + blockLength + "\t" + evalState.getProb() + "\t" + (evalState.getProb() / blockLength) + "\t" + evalState.getProportion() + "\t" + samples.get(sampleNo));
+						dupCount++;
+					}
+				}
+				System.err.println(Math.sqrt(sampleVariance) + "\t" + Math.sqrt(newSampleVariance) + "\t" + delCount + "\t" + dupCount + "\t" + totals[sampleNo] + "\t" + samples.get(sampleNo));
+				if (graph) {
+					depthFile.flush();
+					depthFile.close();
+					depthFile = null;
+					cnvFile.println("200\t0\t0\t0\t1");
+					cnvFile.println("200\t0\t0\t0\t3");
+					cnvFile.flush();
+					cnvFile.close();
+					cnvFile = null;
+					if ((delCount > 0) || (dupCount > 0) || allGraphs) {
+						pipe.println("set output \"" + samples.get(sampleNo) + "." + divider + ".cnvs.pdf");
+						pipe.println("plot [* to *] [0.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"1$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) + 0.4 - $4 * 0.6):(yo($1) + 0.4) with boxxy fillstyle solid noborder linecolor rgb \"#FFAAAA\" title \"" + delCount + " Deletion" + (delCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"3$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) - 0.4 + $4 * 0.6) with boxxy fillstyle solid noborder linecolor rgb \"#8888FF\" title \"" + dupCount + " Duplication" + (dupCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".readDepth' using ($2 + xo($1)):(yo($1) - min($4, 1.25) * 0.4):(yo($1) + min($4, 1.25) * 0.4) with filledcurves linecolor rgb \"#33AA33\" notitle, '' using ($2 + xo($1)):(yo($1) + (min($3, 2.25) - 1.0) * 0.4) with lines linewidth 2 linecolor rgb \"#000000\" title \"" + samples.get(sampleNo) + "\"");
+						pipe.flush();
+					}
 				}
 			}
 		}
@@ -365,7 +462,7 @@ public class SavvyCNV
 		}
 	}
 
-	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic) {
+	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance) {
 		boolean needBlankLine = false;
 		List<State> retval = new ArrayList<State>();
 		for (String chr : arraysMap.keySet()) {
@@ -409,7 +506,7 @@ public class SavvyCNV
 			double dupProb = logTransProb;
 			int blocksSinceLast = 1;
 			for (int o = 0; o < dArray.length; o++) {
-				double stddev = Math.sqrt(dPosVariance[o] + sampleVariance);
+				double stddev = Math.sqrt(dPosVariance[o] * sampleVariance / totalPosVariance);
 				double val = dArray[o];
 				if (graph) {
 					if (dPosVariance[o] < 20.0) {
@@ -419,8 +516,8 @@ public class SavvyCNV
 					} else {
 						if (needBlankLine) {
 							depthFile.println("");
+							needBlankLine = false;
 						}
-						needBlankLine = false;
 					}
 				}
 				if (dPosVariance[o] < cutoffV * cutoffV) {

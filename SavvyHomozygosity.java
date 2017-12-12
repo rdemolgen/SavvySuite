@@ -1,8 +1,12 @@
 import htsjdk.samtools.*;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.*;
+import java.io.BufferedInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -19,7 +23,7 @@ import java.util.regex.Pattern;
 public class SavvyHomozygosity
 {
 	public static final int WIDTH = 100000;
-	public static final Pattern INDEL = Pattern.compile(".*[ACGT][ACGT].*");
+	public static final int READ_LENGTH = 200;
 
 	/*
 	 * Method - We want to find homozygous regions using single off-target reads from the BAM file, using linkage disequilibrium.
@@ -39,137 +43,80 @@ public class SavvyHomozygosity
 	 *
 	 * @author Matthew Wakeling
 	 */
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		int variants = 0;
-		VCFFileReader vcf = new VCFFileReader(new File(args[0]));
+		// Variants are read from an ObjectInputStream as VariantArray objects.
+		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
 		BamReader bamReader = new BamReader(args[1]);
-		List<String> vcfSampleNames = vcf.getFileHeader().getGenotypeSamples();
-		TreeMap<Integer, VariantContext> storedVariants = null;
+		TreeMap<Integer, VariantArray> storedVariants = null;
 		TreeMap<Integer, Boolean> storedBases = null;
 		String currentChr = "";
 		MultiViterbi viterbi = null;
-		for (VariantContext context : vcf) {
-			@SuppressWarnings("deprecation") String contextChr = context.getChr();
+		boolean hasMoreVariants = true;
+		VariantArray vArray = null;
+		try {
+			vArray = (VariantArray) vcf.readObject();
+		} catch (EOFException e) {
+			hasMoreVariants = false;
+		}
+		while (hasMoreVariants) {
+			String contextChr = vArray.getChr();
 			if (!(currentChr.equals(contextChr))) {
 				if (viterbi != null) {
 					viterbi.finish();
 				}
-				storedVariants = new TreeMap<Integer, VariantContext>();
+				storedVariants = new TreeMap<Integer, VariantArray>();
 				currentChr = contextChr;
 				storedBases = new TreeMap<Integer, Boolean>();
 				viterbi = new MultiViterbi(currentChr);
 			}
-			String alleles = "" + context.getAlleles();
-			boolean indelMatch = INDEL.matcher(alleles).matches();
-			if (!indelMatch) {
-				int ac = 0;
-				int an = 0;
-				for (String sample : vcfSampleNames) {
-					Genotype contextGt = context.getGenotype(sample);
-					if (contextGt.isHomVar()) {
-						ac += 2;
-					} else if (contextGt.isHet()) {
-						ac++;
+			int[] bases = bamReader.getCounts(contextChr, vArray.getPosition());
+			int wildCount = bases[baseIndex(vArray.getWild())];
+			int varCount = bases[baseIndex(vArray.getVar())];
+			if (wildCount + varCount > 0) {
+				//System.out.println(vArray.getChr() + ":" + vArray.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + vArray.getWild() + ">" + vArray.getVar() + "\t" + wildCount + "\t" + varCount);
+				if ((wildCount == 0) || (varCount == 0)) {
+					if (wildCount + varCount > 2) {
+						viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), 1.1));
+						//System.err.println(currentChr + "\t" + vArray.getPosition() + "\t1.1");
 					}
-					an += 2;
-				}
-				if (ac * 4 > an) {
-					int[] bases = bamReader.getCounts(contextChr, context.getStart());
-					int wildCount = bases[baseIndex(context.getAlleles().get(0).toString().charAt(0))];
-					int varCount = bases[baseIndex(context.getAlleles().get(1).toString().charAt(0))];
-					if (wildCount + varCount > 0) {
-						//System.out.println(context.getChr() + ":" + context.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + context.getAlleles() + "\t" + wildCount + "\t" + varCount);
-						if ((wildCount == 0) || (varCount == 0)) {
-							if (wildCount + varCount > 2) {
-								viterbi.addSignal(new ViterbiSignal(context.getStart(), 1.1));
-								//System.err.println(currentChr + "\t" + context.getStart() + "\t1.1");
-							}
-							boolean thisBase = varCount > 0;
-							Iterator<Map.Entry<Integer, Boolean>> storedBaseIter = storedBases.entrySet().iterator();
-							while (storedBaseIter.hasNext()) {
-								Map.Entry<Integer, Boolean> storedBase = storedBaseIter.next();
-								if (storedBase.getKey() < context.getStart() - WIDTH) {
-									storedBaseIter.remove();
-								}
-							}
-							Iterator<Map.Entry<Integer, VariantContext>> storedIter = storedVariants.entrySet().iterator();
-							while (storedIter.hasNext()) {
-								Map.Entry<Integer, VariantContext> storedEntry = storedIter.next();
-								if (storedEntry.getKey() < context.getStart() - WIDTH) {
-									storedIter.remove();
-								} else {
-									boolean otherBase = storedBases.get(storedEntry.getKey());
-									int[] grid = new int[9];
-									for (String sample : vcfSampleNames) {
-										Genotype contextGt = context.getGenotype(sample);
-										Genotype storedGt = storedEntry.getValue().getGenotype(sample);
-										if (contextGt.isHomVar()) {
-											if (storedGt.isHomVar()) {
-												grid[8]++;
-											} else if (storedGt.isHet()) {
-												grid[7]++;
-											} else {
-												grid[6]++;
-											}
-										} else if (contextGt.isHet()) {
-											if (storedGt.isHomVar()) {
-												grid[5]++;
-											} else if (storedGt.isHet()) {
-												grid[4]++;
-											} else {
-												grid[3]++;
-											}
-										} else {
-											if (storedGt.isHomVar()) {
-												grid[2]++;
-											} else if (storedGt.isHet()) {
-												grid[1]++;
-											} else {
-												grid[0]++;
-											}
-										}
-									}
-									int[] grid2 = new int[4];
-									// grid is the 3x3 grid of genotypes. We now need to convert that into a 2x2 grid, separating the diploid haplotypes if possible. The only case where we cannot work it out is grid[4], where both variants are 0/1.
-									// grid2[0] is the ref/ref case. grid[0] (0/0 - 0/0) provides two, while grid[1] (0/0 - 0/1) and grid[3] (0/1 - 0/0) provide one each.
-									grid2[0] = 2 * grid[0] + grid[1] + grid[3];
-									// grid2[1] is the ref/var case. grid[1] (0/0 - 0/1) provides one, grid[2] (0/0 - 1/1) provides two, and grid[5] (0/1 - 1/1) provides one.
-									grid2[1] = grid[1] + 2 * grid[2] + grid[5];
-									// grid2[2] is the var/ref case. grid[3] (0/1 - 0/0) provides one, grid[6] (1/1 - 0/0) provides two, and grid[7] (1/1 - 0/1) provides one.
-									grid2[2] = grid[3] + 2 * grid[6] + grid[7];
-									// grid2[3] is the var/var case. grid[5] (0/1 - 1/1) provides one, grid[7] (1/1 - 0/1) provides one, and grid[8] (1/1 - 1/1) provides two.
-									grid2[3] = grid[5] + grid[7] + 2 * grid[8];
-									// We can now calculate dprime
-									int total = grid2[0] + grid2[1] + grid2[2] + grid2[3];
-									double pab = (grid2[3] * 1.0) / total;
-									double pa = ((grid2[2] + grid2[3]) * 1.0) / total;
-									double pb = ((grid2[1] + grid2[3]) * 1.0) / total;
-									double d = pab - pa * pb;
-									double dmin = d < 0.0 ? Math.max(-pa * pb, -(1.0 - pa) * (1.0 - pb)) : Math.min(pa * (1.0 - pb), pb * (1.0 - pa));
-									double dprime = d / dmin;
-									//System.out.println(context.getChr() + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime);
-									if ((pa > 0.0) && (pb > 0.0) && (pa < 1.0) && (pb < 1.0)) {
-										double rsquared = (d / Math.sqrt(pa * (1.0 - pa) * pb * (1.0 - pb)));
-										//System.out.println(context.getChr() + "\t" + context.getStart() + "\t" + storedEntry.getKey() + "\t" + (context.getStart() - storedEntry.getKey()) + "\t" + grid2[0] + "\t" + grid2[1] + "\t" + grid2[2] + "\t" + grid2[3] + "\t" + d + "\t" + dmin + "\t" + dprime + "\t" + rsquared + "\t[" + grid[0] + "," + grid[1] + "," + grid[2] + "," + grid[3] + "," + grid[4] + "," + grid[5] + "," + grid[6] + "," + grid[7] + "," + grid[8] + "]\t" + ((thisBase == otherBase) ? rsquared : -rsquared));
-										double rsquaredMinus = (thisBase == otherBase) ? rsquared : -rsquared;
-										if (rsquaredMinus < -0.8) {
-											viterbi.addSignal(new ViterbiSignal((context.getStart() + storedEntry.getKey()) / 2, (rsquaredMinus + 0.8) * 100.0));
-											//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus + 0.8) * 5.0));
-										} else if (rsquaredMinus > 0.8) {
-											viterbi.addSignal(new ViterbiSignal((context.getStart() + storedEntry.getKey()) / 2, (rsquaredMinus - 0.8) * 5.0));
-											//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus - 0.8) * 5.0));
-										}
-									}
-								}
-							}
-							storedVariants.put(context.getStart(), context);
-							storedBases.put(context.getStart(), thisBase);
-						} else {
-							viterbi.addSignal(new ViterbiSignal(context.getStart(), -6.0));
-							//System.err.println(currentChr + "\t" + context.getStart() + "\t-1.1");
+					boolean thisBase = varCount > 0;
+					Iterator<Map.Entry<Integer, Boolean>> storedBaseIter = storedBases.entrySet().iterator();
+					while (storedBaseIter.hasNext()) {
+						Map.Entry<Integer, Boolean> storedBase = storedBaseIter.next();
+						if (storedBase.getKey() < vArray.getPosition() - WIDTH) {
+							storedBaseIter.remove();
 						}
 					}
+					Iterator<Map.Entry<Integer, VariantArray>> storedIter = storedVariants.entrySet().iterator();
+					while (storedIter.hasNext()) {
+						Map.Entry<Integer, VariantArray> storedEntry = storedIter.next();
+						if (storedEntry.getKey() < vArray.getPosition() - WIDTH) {
+							storedIter.remove();
+						} else if (storedEntry.getKey() < vArray.getPosition() - READ_LENGTH) {
+							boolean otherBase = storedBases.get(storedEntry.getKey());
+							double rsquared = vArray.getRsquared(storedEntry.getValue());
+							double rsquaredMinus = (thisBase == otherBase) ? rsquared : -rsquared;
+							if (rsquaredMinus < -0.8) {
+								viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus + 0.8) * 100.0));
+								//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus + 0.8) * 5.0));
+							} else if (rsquaredMinus > 0.8) {
+								viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus - 0.8) * 5.0));
+								//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus - 0.8) * 5.0));
+							}
+						}
+					}
+					storedVariants.put(vArray.getPosition(), vArray);
+					storedBases.put(vArray.getPosition(), thisBase);
+				} else {
+					viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), -6.0));
+					//System.err.println(currentChr + "\t" + vArray.getPosition() + "\t-1.1");
 				}
+			}
+			try {
+				vArray = (VariantArray) vcf.readObject();
+			} catch (EOFException e) {
+				hasMoreVariants = false;
 			}
 		}
 		if (viterbi != null) {

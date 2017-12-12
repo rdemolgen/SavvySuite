@@ -47,6 +47,7 @@ In addition, the following arguments can be provided:
 + -cutoff <noise cutoff> - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
 + -g - Switches on the generation of graphs for all samples that have a detected CNV. The generated graphs will be placed in the same directory as the *.coverageBinner file.
 + -a - The same as ```-g```, but produces a graph for every sample.
++ -cytoBands <file> - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
@@ -68,15 +69,21 @@ The log_messages.txt file contains log messages, and also a summary of each samp
 4. Number of duplications found in the sample
 5. The filename containing the sample summary.
 
+### PrepareLinkageData
+This software is used to pre-process linkage disequilibrium data, to get it into a format that can be read quickly by SavvyHomozygosity and SavvySharedHaplotypes. It requires a vcf file containing whole genome genotype data for many samples (a few hundred would be appropriate). It can be run as follows:
+```
+java -Xmx5g PrepareLinkageData whole_genome.vcf >linkage_data
+```
+
 ### SavvyHomozygosity
 This software analyses the off-target reads to determine homozygous regions of the genome for a single sample. It can be run as follows:
 ```
-java -Xmx5g SavvyHomozygosity whole_genome.vcf sample.bam >sample.bed
+java -Xmx5g SavvyHomozygosity linkage_data sample.bam >sample.bed
 ```
-The whole_genome.vcf file must contain whole-genome sequencing data with many (a few hundred would be appropriate) samples, in order to calculate population linkage disequilibrium. The sample.bam contains the sample targeted sequencing data. The software produces a BED file containing homozygous regions. The analysis requires at least a million off-target reads, and preferably more, so a sample with three million reads and about 50% off-target is about right. The software searches for read pairs, so the amount of detail that can be extracted (and consequently the time taken) is proportional to the square of the number of off-target reads. Samples with too few reads do not produce a valid result.
+The sample.bam contains the sample targeted sequencing data. The software produces a BED file containing homozygous regions. The analysis requires at least a million off-target reads, and preferably more, so a sample with three million reads and about 50% off-target is about right. The software searches for read pairs, so the amount of detail that can be extracted (and consequently the time taken) is proportional to the square of the number of off-target reads. Samples with too few reads do not produce a valid result.
 
 ### SavvySharedHaplotypes
 This software analyses the off-target reads from two samples to determine areas with homozygous shared haplotypes, using the same methodology as SavvyHomozygosity. It can be run as follows:
 ```
-java -Xmx5g SavvySharedHomozygosity whole_genome.vcf sample1.bam sample2.bam >shared.bed
+java -Xmx5g SavvySharedHomozygosity linkage_data sample1.bam sample2.bam >shared.bed
 ```

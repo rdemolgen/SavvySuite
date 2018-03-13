@@ -1,5 +1,5 @@
 # SavvySuite
-Suite of tools for analysing off-target reads to find CNVs, homozygous regions, and shared haplotypes
+Suite of tools for analysing off-target reads to find CNVs, homozygous regions, and shared haplotypes.
 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
 
@@ -49,6 +49,8 @@ In addition, the following arguments can be provided:
 + -a - The same as ```-g```, but produces a graph for every sample.
 + -cytoBands <file> - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
++ -sv <number> - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
++ -minReads <number> - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome
@@ -87,3 +89,12 @@ This software analyses the off-target reads from two samples to determine areas 
 ```
 java -Xmx5g SavvySharedHomozygosity linkage_data sample1.bam sample2.bam >shared.bed
 ```
+
+### SavvyVcfHomozygosity
+This software analyses a VCF file to determine homozygous regions of the genome. It can be run as follows:
+```
+java -Xmx5g SavvyVcfHomozygosity linkage_data input.vcf <options> <samplenames> >sample.bed
+```
+If a single samplename is used with no options, then the output will be a BED file containing homozygous regions for the sample. If multiple samplenames are used, then only regions that are homozygous in all samples are output. Adding the "-p" option alters this behaviour, so that regions where all the named samples share a haplotype are output.
+
+The linkage_data file is used to filter the variants in the VCF file to only allow variants that are close to a Hardy-Weinberg equilibrium, to reduce the number of false heterozygous variants in homozygous regions. The variants are then analysed using a multi-resolution hidden markov model to find regions of at least 16 variants where the proportion of heterozygous variants is no more than 10%.

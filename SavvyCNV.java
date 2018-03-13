@@ -35,10 +35,13 @@ public class SavvyCNV
 		double minProb = 0.00000000001;
 		boolean dump = false;
 		boolean errorModel = false;
+		boolean intervals = false;
 		boolean mosaic = false;
 		String graphSize = "16in, 9in";
 		double fontScale = 1.0;
 		int svsBlanked = 5;
+		int minReads = 20;
+		int errorType = 0; // 0 means multiply, 1 means add, 2 means poisson.
 		for (int i = 0; i < args.length; i++) {
 			if ("-d".equals(args[i])) {
 				i++;
@@ -61,8 +64,11 @@ public class SavvyCNV
 				dump = true;
 			} else if ("-errorModel".equals(args[i])) {
 				errorModel = true;
+			} else if ("-intervals".equals(args[i])) {
+				intervals = true;
 			} else if ("-mosaic".equals(args[i])) {
 				mosaic = true;
+				System.err.println("Using mosaic mode");
 			} else if ("-size".equals(args[i])) {
 				i++;
 				graphSize = args[i];
@@ -72,6 +78,13 @@ public class SavvyCNV
 			} else if ("-sv".equals(args[i])) {
 				i++;
 				svsBlanked = Integer.parseInt(args[i]);
+			} else if ("-minReads".equals(args[i])) {
+				i++;
+				minReads = Integer.parseInt(args[i]);
+			} else if ("-addError".equals(args[i])) {
+				errorType = 1;
+			} else if ("-poisson".equals(args[i])) {
+				errorType = 2;
 			} else {
 				samples.add(args[i]);
 			}
@@ -79,6 +92,14 @@ public class SavvyCNV
 		double logTransProb = log(transitionProb);
 		//System.err.println("Transition probability " + logTransProb);
 		System.err.println("Processing " + samples.size() + " samples");
+		System.err.println("Using divider of " + divider);
+		System.err.println("Using noise cutoff of " + cutoff);
+		System.err.println("Using transition probability of " + transitionProb);
+		System.err.println("Blanking " + svsBlanked + " singular vectors");
+		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
+		if (errorType != 0) {
+			System.err.println("Using " + (errorType == 1 ? "additive" : "poisson") + " error model");
+		}
 		if (svsBlanked >= samples.size()) {
 			System.err.println(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
 			System.err.println("Cannot process samples.");
@@ -124,7 +145,6 @@ public class SavvyCNV
 		}
 		
 		System.err.println("Normalising");
-		double[] scaleArray = new double[samples.size()];
 		int totalPositions = 0;
 		for (String chr : arraysMap.keySet()) {
 			long[][] array = arraysMap.get(chr);
@@ -132,42 +152,22 @@ public class SavvyCNV
 			for (int i = 0; i < samples.size(); i++) {
 				if (array[i] != null) {
 					longestSample = (longestSample > array[i].length ? longestSample : array[i].length);
+				} else {
+					array[i] = new long[0];
 				}
 			}
 			totalPositions += longestSample;
-			for (int o = 0; o < longestSample; o++) {
-				double pTotal = 0.0;
-				for (int i = 0; i < samples.size(); i++) {
-					if (array[i] == null) {
-						array[i] = new long[1];
-					}
-					if (array[i].length > o) {
-						pTotal += array[i][o];
-					}
-				}
-				if (pTotal > 0.0) {
-					for (int i = 0; i < samples.size(); i++) {
-						if (array[i].length > o) {
-							scaleArray[i] += array[i][o] * samples.size() / pTotal;
-						}
-					}
-				}
-			}
 		}
 		long total = 0L;
-		double scale = 0.0;
 		for (int i = 0; i < samples.size(); i++) {
 			total += totals[i];
-			scale += scaleArray[i];
-		}
-		for (int i = 0; i < samples.size(); i++) {
-			scaleArray[i] = scaleArray[i] * samples.size() / scale;
 		}
 		System.err.println("Average reads in each bucket: " + ((total * 1.0) / samples.size() / totalPositions));
 		PrintStream out = new PrintStream(new BufferedOutputStream(System.out));
 		// Work out which chunks of the genome we want to do SVD on.
 		List<String> chunkChromosomes = new ArrayList<String>();
 		List<Integer> chunkStarts = new ArrayList<Integer>();
+		double[] scaleArray = new double[samples.size()];
 		for (String chr : arraysMap.keySet()) {
 			long[][] array = arraysMap.get(chr);
 			boolean repeat = true;
@@ -181,15 +181,37 @@ public class SavvyCNV
 						repeat = true;
 					}
 				}
-				if ((totalReads * 50 * totalPositions > total) && (totalReads > samples.size() * 50)) {
+				if ((totalReads * 50 * totalPositions > total) && (totalReads > samples.size() * minReads)) {
 				//if (totalReads > 0) {
 					chunkChromosomes.add(chr);
 					chunkStarts.add(start);
+					for (int i = 0; i < samples.size(); i++) {
+						if (array[i].length > start) {
+							scaleArray[i] += (1.0 * array[i][start]) * samples.size() / totalReads;
+						}
+					}
 				}
 				start++;
 			}
 		}
+		System.err.println("Number of genome chunks: " + chunkChromosomes.size());
+		if (intervals) {
+			for (int o = 0; o < chunkChromosomes.size(); o++) {
+				String chr = chunkChromosomes.get(o);
+				int start = chunkStarts.get(o);
+				System.out.println(chr + "\t" + (start * divider) + "\t" + ((start + 1) * divider));
+			}
+			System.exit(0);
+		}
+		double scale = 0.0;
+		for (int i = 0; i < samples.size(); i++) {
+			scale += scaleArray[i];
+		}
+		for (int i = 0; i < samples.size(); i++) {
+			scaleArray[i] = scaleArray[i] * samples.size() / scale;
+		}
 		double[][] aArray = new double[chunkChromosomes.size()][samples.size()];
+		double[][] eArray = new double[chunkChromosomes.size()][samples.size()];
 		for (int o = 0; o < chunkChromosomes.size(); o++) {
 			String chr = chunkChromosomes.get(o);
 			int start = chunkStarts.get(o);
@@ -201,10 +223,13 @@ public class SavvyCNV
 			sum = sum / samples.size();
 			for (int i = 0; i < samples.size(); i++) {
 				aArray[o][i] = Math.log((array[i].length > start ? array[i][start] / scaleArray[i] / sum : 0.0) + 0.01);
+				eArray[o][i] = scaleArray[i] * sum;
 			}
 		}
-		System.err.println("Number of genome chunks: " + chunkChromosomes.size());
 		Jama.Matrix A = new Jama.Matrix(aArray);
+		if (samples.size() > chunkChromosomes.size()) {
+			A = A.transpose();
+		}
 		long time1 = System.currentTimeMillis();
 		Jama.SingularValueDecomposition decomp = new Jama.SingularValueDecomposition(A);
 		long time2 = System.currentTimeMillis();
@@ -317,6 +342,9 @@ public class SavvyCNV
 		}
 		Jama.Matrix Aprime = decomp.getU().times(S).times(decomp.getV().transpose());
 		//Jama.Matrix Aprime = A;
+		if (samples.size() > chunkChromosomes.size()) {
+			Aprime = Aprime.transpose();
+		}
 		double[][] aPrimeArray = Aprime.getArray();
 		if (dump) {
 			for (int o = 0; o < chunkChromosomes.size(); o++) {
@@ -382,7 +410,7 @@ public class SavvyCNV
 			// We need to do an initial CNV detection, remove these from consideration, and recalculate.
 			// Also, posVariance[i] contains the variance for position number i.
 			// Run viterbi to get initial CNV calls
-			List<State> cnvs = viterbi(arraysMap, false, null, null, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, sampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance);
+			List<State> cnvs = viterbi(arraysMap, false, null, null, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, sampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance, aArray, errorType, eArray);
 			// Now re-calculate sampleVariance, without those parts that have a detected CNV.
 			double sum = 0.0;
 			double ssum = 0.0;
@@ -409,6 +437,7 @@ public class SavvyCNV
 			if (errorModel) {
 				for (int o = 0; o < aPrimeArray.length; o++) {
 					double val = Math.exp(aPrimeArray[o][sampleNo]) - 1.01;
+					double eVal = eArray[o][sampleNo];
 					if (posVariance[o] < cutoff * cutoff) {
 						String chr = chunkChromosomes.get(o);
 						int start = chunkStarts.get(o) * divider;
@@ -419,12 +448,12 @@ public class SavvyCNV
 							}
 						}
 						if (notCovered) {
-							System.out.println(Math.sqrt(newSampleVariance) + "\t" + Math.sqrt(posVariance[o]) + "\t" + val);
+							System.out.println(Math.sqrt(posVariance[o] * newSampleVariance / totalPosVariance) + "\t" + Math.sqrt(posVariance[o] + newSampleVariance) + "\t" + (1.0 / Math.sqrt(eVal)) + "\t" + val);
 						}
 					}
 				}
 			} else {
-				cnvs = viterbi(arraysMap, graph, depthFile, cnvFile, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, newSampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance);
+				cnvs = viterbi(arraysMap, graph, depthFile, cnvFile, posVariance, aPrimeArray, divider, logTransProb, minProb, sampleNo, newSampleVariance, chunkChromosomes, chunkStarts, cutoffV, mosaic, totalPosVariance, aArray, errorType, eArray);
 				int delCount = 0;
 				int dupCount = 0;
 				for (State evalState : cnvs) {
@@ -462,7 +491,7 @@ public class SavvyCNV
 		}
 	}
 
-	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance) {
+	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance, double[][] aArray, int errorType, double[][] eArray) {
 		boolean needBlankLine = false;
 		List<State> retval = new ArrayList<State>();
 		for (String chr : arraysMap.keySet()) {
@@ -472,6 +501,8 @@ public class SavvyCNV
 			}
 			long[] array = arraysMap.get(chr)[sampleNo];
 			double[] dArray = new double[array.length];
+			double[] beforeArray = new double[array.length];
+			double[] dEArray = new double[array.length];
 			double[] dPosVariance = new double[array.length];
 			for (int o = 0; o < dPosVariance.length; o++) {
 				dPosVariance[o] = Double.MAX_VALUE;
@@ -483,6 +514,8 @@ public class SavvyCNV
 					int start = chunkStarts.get(o);
 					if (dArray.length > start) {
 						dArray[start] = Math.exp(aPrimeArray[o][sampleNo]) - 0.01;
+						beforeArray[start] = Math.exp(aArray[o][sampleNo]) - 0.01;
+						dEArray[start] = eArray[o][sampleNo];
 						dPosVariance[start] = posVariance[o];
 					}
 					maxPos = Math.max(maxPos, start);
@@ -507,11 +540,18 @@ public class SavvyCNV
 			int blocksSinceLast = 1;
 			for (int o = 0; o < dArray.length; o++) {
 				double stddev = Math.sqrt(dPosVariance[o] * sampleVariance / totalPosVariance);
+				if (errorType == 1) {
+					// Additive error model
+					stddev = Math.sqrt(dPosVariance[o] + sampleVariance);
+				} else if (errorType == 2) {
+					// Poisson error model
+					stddev = 1.0 / Math.sqrt(dEArray[o]);
+				}
 				double val = dArray[o];
 				if (graph) {
 					if (dPosVariance[o] < 20.0) {
-						depthFile.println(chr + "\t" + (o * divider) + "\t" + val + "\t" + stddev);
-						depthFile.println(chr + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev);
+						depthFile.println(chr + "\t" + (o * divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
+						depthFile.println(chr + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
 						needBlankLine = true;
 					} else {
 						if (needBlankLine) {

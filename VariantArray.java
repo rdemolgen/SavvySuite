@@ -76,8 +76,13 @@ public class VariantArray implements Serializable
 	public String toString() {
 		StringBuilder retval = new StringBuilder();
 		retval.append(chromosome + ":" + position + " " + wild + ">" + var + " ");
+		int[] counts = new int[3];
 		for (byte b : samples) {
+			counts[b]++;
 			retval.append("" + b);
+		}
+		for (int i = 0; i < 3; i++) {
+			retval.append("\t" + counts[i]);
 		}
 		return retval.toString();
 	}

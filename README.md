@@ -39,18 +39,18 @@ This step can be performed in parallel on each sample, and will produce a file a
 
 To perform the analysis, the following command should be used:
 ```
-java -Xmx30g SavvyCNV -d <size> *.coverageBinner >cnv_list.csv 2>log_messages.txt
+java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.txt
 ```
 The <size> parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected.
 In addition, the following arguments can be provided:
-+ -trans <transition probability> - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
-+ -cutoff <noise cutoff> - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
++ -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
++ -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
 + -g - Switches on the generation of graphs for all samples that have a detected CNV. The generated graphs will be placed in the same directory as the *.coverageBinner file.
 + -a - The same as ```-g```, but produces a graph for every sample.
-+ -cytoBands <file> - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.
++ -cytoBands (file) - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
-+ -sv <number> - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
-+ -minReads <number> - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed.
++ -sv (number) - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
++ -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome
@@ -69,7 +69,8 @@ The log_messages.txt file contains log messages, and also a summary of each samp
 2. Noisyness of the sample after excluding known CNVs (the CNV calling is performed twice, as the calling depends on the noisyness of the sample). This figure should be below 0.2 for good results. If too many of the samples have a high noisyness, then increase the chunk size parameter (-d <size>).
 3. Number of deletions found in the sample
 4. Number of duplications found in the sample
-5. The filename containing the sample summary.
+5. The number of reads in the sample.
+6. The filename containing the sample summary.
 
 ### PrepareLinkageData
 This software is used to pre-process linkage disequilibrium data, to get it into a format that can be read quickly by SavvyHomozygosity and SavvySharedHaplotypes. It requires a vcf file containing whole genome genotype data for many samples (a few hundred would be appropriate). It can be run as follows:
@@ -93,7 +94,7 @@ java -Xmx5g SavvySharedHomozygosity linkage_data sample1.bam sample2.bam >shared
 ### SavvyVcfHomozygosity
 This software analyses a VCF file to determine homozygous regions of the genome. It can be run as follows:
 ```
-java -Xmx5g SavvyVcfHomozygosity linkage_data input.vcf <options> <samplenames> >sample.bed
+java -Xmx5g SavvyVcfHomozygosity linkage_data input.vcf (options) (samplenames) >sample.bed
 ```
 If a single samplename is used with no options, then the output will be a BED file containing homozygous regions for the sample. If multiple samplenames are used, then only regions that are homozygous in all samples are output. Adding the "-p" option alters this behaviour, so that regions where all the named samples share a haplotype are output.
 

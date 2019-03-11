@@ -43,6 +43,7 @@ public class PrepareLinkageData
 	 */
 	public static void main(String[] args) throws IOException {
 		VCFFileReader vcf = new VCFFileReader(new File(args[0]));
+		boolean allVariants = (args.length > 1 ? "-all".equals(args[1]) : false);
 		List<String> vcfSampleNames = vcf.getFileHeader().getGenotypeSamples();
 		TreeMap<Integer, VariantArray> storedVariants = null;
 		String currentChr = "";
@@ -69,20 +70,24 @@ public class PrepareLinkageData
 				}
 				if ((ac * 8 > an) && (ac * 8 < an * 7)) {
 					VariantArray vArray = new VariantArray(vcfSampleNames, context);
-					Iterator<Map.Entry<Integer, VariantArray>> storedIter = storedVariants.entrySet().iterator();
-					while (storedIter.hasNext()) {
-						Map.Entry<Integer, VariantArray> storedEntry = storedIter.next();
-						if (storedEntry.getKey() < context.getStart() - WIDTH) {
-							storedIter.remove();
-						} else {
-							double rsquared = vArray.getRsquared(storedEntry.getValue());
-							if ((rsquared < -0.8) || (rsquared > 0.8)) {
-								output.add(vArray);
-								output.add(storedEntry.getValue());
+					if (allVariants) {
+						output.add(vArray);
+					} else {
+						Iterator<Map.Entry<Integer, VariantArray>> storedIter = storedVariants.entrySet().iterator();
+						while (storedIter.hasNext()) {
+							Map.Entry<Integer, VariantArray> storedEntry = storedIter.next();
+							if (storedEntry.getKey() < context.getStart() - WIDTH) {
+								storedIter.remove();
+							} else {
+								double rsquared = vArray.getRsquared(storedEntry.getValue());
+								if ((rsquared < -0.8) || (rsquared > 0.8)) {
+									output.add(vArray);
+									output.add(storedEntry.getValue());
+								}
 							}
 						}
+						storedVariants.put(context.getStart(), vArray);
 					}
-					storedVariants.put(context.getStart(), vArray);
 				}
 			}
 		}

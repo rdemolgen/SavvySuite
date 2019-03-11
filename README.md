@@ -51,6 +51,7 @@ In addition, the following arguments can be provided:
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
 + -sv (number) - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
 + -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed. The default is 20.
++ -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome

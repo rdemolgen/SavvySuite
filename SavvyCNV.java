@@ -60,6 +60,9 @@ public class SavvyCNV
 			} else if ("-cytoBands".equals(args[i])) {
 				i++;
 				cytoBands = args[i];
+			} else if ("-minProb".equals(args[i])) {
+				i++;
+				minProb = exp(-Double.parseDouble(args[i]));
 			} else if ("-dump".equals(args[i])) {
 				dump = true;
 			} else if ("-errorModel".equals(args[i])) {
@@ -112,7 +115,7 @@ public class SavvyCNV
 		long[] totals = new long[samples.size()];
 		Map<String, long[][]> arraysMap = new TreeMap<String, long[][]>();
 		for (int i = 0; i < samples.size(); i++) {
-			System.err.println("Reading " + samples.get(i));
+			System.err.println("Reading " + i + " " + samples.get(i));
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(samples.get(i)));
 			@SuppressWarnings("unchecked") LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
 			for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
@@ -252,15 +255,17 @@ public class SavvyCNV
 			streams.add(pipe2);
 			pipe = new SplitPrintStream(streams);
 			pipe.println("set terminal pdf noenhanced" + (fontScale == 1.0 ? "" : " fontscale " + fontScale) + " size " + graphSize);
-			PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SVs.csv"));
-			for (int i = 0; i < samples.size(); i++) {
-				svFile.println((i + 1) + "\t" + S.getArray()[i][i]);
+			if (samples.size() <= chunkChromosomes.size()) {
+				PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SVs.csv"));
+				for (int i = 0; i < samples.size(); i++) {
+					svFile.println((i + 1) + "\t" + S.getArray()[i][i]);
+				}
+				svFile.flush();
+				svFile.close();
+				pipe.println("set output \"" + tempFileName + ".SVs.pdf\"");
+				pipe.println("plot '" + tempFileName + ".SVs.csv' using 1:2:($1 - 0.4):($1 + 0.4):(0):2 with boxxy fillstyle solid notitle");
+				pipe.flush();
 			}
-			svFile.flush();
-			svFile.close();
-			pipe.println("set output \"" + tempFileName + ".SVs.pdf\"");
-			pipe.println("plot '" + tempFileName + ".SVs.csv' using 1:2:($1 - 0.4):($1 + 0.4):(0):2 with boxxy fillstyle solid notitle");
-			pipe.flush();
 			pipe.println("yo(a) = (a > 13 && a <= 22 ? 27 - a : (a == 23 || a == 24 ? 14 : a))");
 			pipe.println("xo(a) = (a == 22 || a == 21 ? 200000000 : (a == 20 || a == 19 ? 180000000 : (a == 24 ? 170000000 : (a == 16 || a == 17 || a == 18 ? 160000000 : (a == 15 ? 150000000 : (a == 14 ? 140000000 : 0))))))");
 			pipe.println("set label \"Y\" at 166000000, 14 right");
@@ -297,43 +302,45 @@ public class SavvyCNV
 			pipe.println("min(a, b) = (a > b ? b : a)");
 			pipe.println("set ytics (\"1\" 1, \"2\" 2, \"3\" 3, \"4\" 4, \"5\" 5, \"6\" 6, \"7\" 7, \"8\" 8, \"9\" 9, \"10\" 10, \"11\" 11, \"12\" 12, \"13\" 13, \"X\" 14)");
 			pipe.println("set xtics (\"0\" 0, \"10M\" 10000000, \"20M\" 20000000, \"30M\" 30000000, \"40M\" 40000000, \"50M\" 50000000, \"60M\" 60000000, \"70M\" 70000000, \"80M\" 80000000, \"90M\" 90000000, \"100M\" 100000000, \"110M\" 110000000, \"120M\" 120000000, \"130M\" 130000000, \"140M\" 140000000, \"150M\" 150000000, \"160M\" 160000000, \"170M\" 170000000, \"180M\" 180000000, \"190M\" 190000000, \"200M\" 200000000, \"210M\" 210000000, \"220M\" 220000000, \"230M\" 230000000, \"240M\" 240000000, \"250M\" 250000000)");
-			for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
-				svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_chunk.csv"));
-				boolean needBlankLine = false;
-				for (String chr : arraysMap.keySet()) {
-					if (needBlankLine) {
-						svFile.println("");
-						needBlankLine = false;
-					}
-					int lastStart = -1;
-					for (int o = 0; o < chunkChromosomes.size(); o++) {
-						String chunkChr = chunkChromosomes.get(o);
-						if (chr.equals(chunkChr)) {
-							int start = chunkStarts.get(o);
-							if (start > lastStart + 1) {
-								if (needBlankLine) {
-									svFile.println("");
-									needBlankLine = false;
+			if (samples.size() <= chunkChromosomes.size()) {
+				for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
+					PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_chunk.csv"));
+					boolean needBlankLine = false;
+					for (String chr : arraysMap.keySet()) {
+						if (needBlankLine) {
+							svFile.println("");
+							needBlankLine = false;
+						}
+						int lastStart = -1;
+						for (int o = 0; o < chunkChromosomes.size(); o++) {
+							String chunkChr = chunkChromosomes.get(o);
+							if (chr.equals(chunkChr)) {
+								int start = chunkStarts.get(o);
+								if (start > lastStart + 1) {
+									if (needBlankLine) {
+										svFile.println("");
+										needBlankLine = false;
+									}
 								}
+								double val = decomp.getU().getArray()[o][i];
+								svFile.println(chr + "\t" + (start * divider) + "\t" + val);
+								svFile.println(chr + "\t" + (start * divider + divider) + "\t" + val);
+								needBlankLine = true;
+								lastStart = start;
 							}
-							double val = decomp.getU().getArray()[o][i];
-							svFile.println(chr + "\t" + (start * divider) + "\t" + val);
-							svFile.println(chr + "\t" + (start * divider + divider) + "\t" + val);
-							needBlankLine = true;
-							lastStart = start;
 						}
 					}
+					svFile.flush();
+					svFile.close();
+					svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_sample.csv"));
+					for (int o = 0; o < samples.size(); o++) {
+						svFile.println(o + "\t" + decomp.getV().getArray()[o][i]);
+					}
+					svFile.flush();
+					svFile.close();
+					pipe.println("set output \"" + tempFileName + ".SV_" + i + ".pdf");
+					pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
 				}
-				svFile.flush();
-				svFile.close();
-				svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_sample.csv"));
-				for (int o = 0; o < samples.size(); o++) {
-					svFile.println(o + "\t" + decomp.getV().getArray()[o][i]);
-				}
-				svFile.flush();
-				svFile.close();
-				pipe.println("set output \"" + tempFileName + ".SV_" + i + ".pdf");
-				pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
 			}
 			pipe.flush();
 		}

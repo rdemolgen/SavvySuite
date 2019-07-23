@@ -10,6 +10,7 @@ import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -24,6 +25,21 @@ public class SavvyHomozygosity
 {
 	public static final int WIDTH = 100000;
 	public static final int READ_LENGTH = 200;
+	public static final Map<String, String> addChrMap = new HashMap<String, String>();
+	public static final Map<String, String> delChrMap = new HashMap<String, String>();
+	static {
+		for (int i = 1; i < 23; i++) {
+			addChrMap.put("" + i, "chr" + i);
+			delChrMap.put("chr" + i, "" + i);
+		}
+		addChrMap.put("X", "chrX");
+		delChrMap.put("chrX", "X");
+		addChrMap.put("Y", "chrY");
+		delChrMap.put("chrY", "Y");
+		addChrMap.put("MT", "chrM");
+		delChrMap.put("chrM", "MT");
+	}
+
 
 	/*
 	 * Method - We want to find homozygous regions using single off-target reads from the BAM file, using linkage disequilibrium.
@@ -45,9 +61,25 @@ public class SavvyHomozygosity
 	 */
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		int variants = 0;
+		double startTransition = 80.0;
+		double negativeMult = 20.0;
 		// Variants are read from an ObjectInputStream as VariantArray objects.
 		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
 		BamReader bamReader = new BamReader(args[1]);
+		boolean outputPoints = false;
+		boolean gotTranslation = false;
+		Map<String, String> translation = null;
+		for (int i = 2; i < args.length; i++) {
+			if ("-points".equals(args[i])) {
+				outputPoints = true;
+			} else if ("-trans".equals(args[i])) {
+				i++;
+				startTransition = Double.parseDouble(args[i]);
+			} else if ("-neg".equals(args[i])) {
+				i++;
+				negativeMult = Double.parseDouble(args[i]);
+			}
+		}
 		TreeMap<Integer, VariantArray> storedVariants = null;
 		TreeMap<Integer, Boolean> storedBases = null;
 		String currentChr = "";
@@ -56,61 +88,91 @@ public class SavvyHomozygosity
 		VariantArray vArray = null;
 		try {
 			vArray = (VariantArray) vcf.readObject();
+			boolean varChr = vArray.getChr().startsWith("chr");
+			boolean bamChr = false;
+			try {
+				bamReader.getCounts("1", 20000);
+			} catch (Exception e) {
+				bamChr = true;
+			}
+			if (varChr && (!bamChr)) {
+				translation = delChrMap;
+			} else if (bamChr && (!varChr)) {
+				translation = addChrMap;
+			}
 		} catch (EOFException e) {
 			hasMoreVariants = false;
 		}
 		while (hasMoreVariants) {
 			String contextChr = vArray.getChr();
-			if (!(currentChr.equals(contextChr))) {
-				if (viterbi != null) {
-					viterbi.finish();
-				}
-				storedVariants = new TreeMap<Integer, VariantArray>();
-				currentChr = contextChr;
-				storedBases = new TreeMap<Integer, Boolean>();
-				viterbi = new MultiViterbi(currentChr);
+			if (translation != null) {
+				contextChr = translation.get(contextChr);
 			}
-			int[] bases = bamReader.getCounts(contextChr, vArray.getPosition());
-			int wildCount = bases[baseIndex(vArray.getWild())];
-			int varCount = bases[baseIndex(vArray.getVar())];
-			if (wildCount + varCount > 0) {
-				//System.out.println(vArray.getChr() + ":" + vArray.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + vArray.getWild() + ">" + vArray.getVar() + "\t" + wildCount + "\t" + varCount);
-				if ((wildCount == 0) || (varCount == 0)) {
-					if (wildCount + varCount > 2) {
-						viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), 1.1));
-						//System.err.println(currentChr + "\t" + vArray.getPosition() + "\t1.1");
+			if (contextChr == null) {
+				if (!gotTranslation) {
+					System.err.println("Variants for some chromosomes are ignored - there is no translation between naming schemes. Chromosome that triggered this message is \"" + vArray.getChr() + "\"");
+					gotTranslation = true;
+				}
+			} else {
+				if (!(currentChr.equals(contextChr))) {
+					if (viterbi != null) {
+						viterbi.finish();
 					}
-					boolean thisBase = varCount > 0;
-					Iterator<Map.Entry<Integer, Boolean>> storedBaseIter = storedBases.entrySet().iterator();
-					while (storedBaseIter.hasNext()) {
-						Map.Entry<Integer, Boolean> storedBase = storedBaseIter.next();
-						if (storedBase.getKey() < vArray.getPosition() - WIDTH) {
-							storedBaseIter.remove();
-						}
-					}
-					Iterator<Map.Entry<Integer, VariantArray>> storedIter = storedVariants.entrySet().iterator();
-					while (storedIter.hasNext()) {
-						Map.Entry<Integer, VariantArray> storedEntry = storedIter.next();
-						if (storedEntry.getKey() < vArray.getPosition() - WIDTH) {
-							storedIter.remove();
-						} else if (storedEntry.getKey() < vArray.getPosition() - READ_LENGTH) {
-							boolean otherBase = storedBases.get(storedEntry.getKey());
-							double rsquared = vArray.getRsquared(storedEntry.getValue());
-							double rsquaredMinus = (thisBase == otherBase) ? rsquared : -rsquared;
-							if (rsquaredMinus < -0.8) {
-								viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus + 0.8) * 100.0));
-								//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus + 0.8) * 5.0));
-							} else if (rsquaredMinus > 0.8) {
-								viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus - 0.8) * 5.0));
-								//System.err.println(currentChr + "\t" + ((context.getStart() + storedEntry.getKey()) / 2) + "\t" + ((rsquaredMinus - 0.8) * 5.0));
+					storedVariants = new TreeMap<Integer, VariantArray>();
+					currentChr = contextChr;
+					storedBases = new TreeMap<Integer, Boolean>();
+					viterbi = new MultiViterbi(currentChr, startTransition);
+				}
+				int[] bases = bamReader.getCounts(contextChr, vArray.getPosition());
+				int wildCount = bases[baseIndex(vArray.getWild())];
+				int varCount = bases[baseIndex(vArray.getVar())];
+				if (wildCount + varCount > 0) {
+					//System.out.println(vArray.getChr() + ":" + vArray.getStart() + "\t" + bases[0] + "\t" + bases[1] + "\t" + bases[2] + "\t" + bases[3] + "\t" + vArray.getWild() + ">" + vArray.getVar() + "\t" + wildCount + "\t" + varCount);
+					if ((wildCount == 0) || (varCount == 0)) {
+						if (wildCount + varCount > 2) {
+							viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), 1.1));
+							if (outputPoints) {
+								System.err.println(currentChr + "\t" + vArray.getPosition() + "\t" + vArray.getPosition() + "\t1.1");
 							}
 						}
+						boolean thisBase = varCount > 0;
+						Iterator<Map.Entry<Integer, Boolean>> storedBaseIter = storedBases.entrySet().iterator();
+						while (storedBaseIter.hasNext()) {
+							Map.Entry<Integer, Boolean> storedBase = storedBaseIter.next();
+							if (storedBase.getKey() < vArray.getPosition() - WIDTH) {
+								storedBaseIter.remove();
+							}
+						}
+						Iterator<Map.Entry<Integer, VariantArray>> storedIter = storedVariants.entrySet().iterator();
+						while (storedIter.hasNext()) {
+							Map.Entry<Integer, VariantArray> storedEntry = storedIter.next();
+							if (storedEntry.getKey() < vArray.getPosition() - WIDTH) {
+								storedIter.remove();
+							} else if (storedEntry.getKey() < vArray.getPosition() - READ_LENGTH) {
+								boolean otherBase = storedBases.get(storedEntry.getKey());
+								double rsquared = vArray.getRsquared(storedEntry.getValue());
+								double rsquaredMinus = (thisBase == otherBase) ? rsquared : -rsquared;
+								if (rsquaredMinus < -0.8) {
+									viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus + 0.8) * 5.0 * negativeMult));
+									if (outputPoints) {
+										System.err.println(currentChr + "\t" + vArray.getPosition() + "\t" + storedEntry.getKey() + "\t" + ((rsquaredMinus + 0.8) * 5.0));
+									}
+								} else if (rsquaredMinus > 0.8) {
+									viterbi.addSignal(new ViterbiSignal((vArray.getPosition() + storedEntry.getKey()) / 2, (rsquaredMinus - 0.8) * 5.0));
+									if (outputPoints) {
+										System.err.println(currentChr + "\t" + vArray.getPosition() + "\t" + storedEntry.getKey() + "\t" + ((rsquaredMinus - 0.8) * 5.0));
+									}
+								}
+							}
+						}
+						storedVariants.put(vArray.getPosition(), vArray);
+						storedBases.put(vArray.getPosition(), thisBase);
+					} else {
+						viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), -6.0));
+						if (outputPoints) {
+							System.err.println(currentChr + "\t" + vArray.getPosition() + "\t" + vArray.getPosition() + "\t-1.1");
+						}
 					}
-					storedVariants.put(vArray.getPosition(), vArray);
-					storedBases.put(vArray.getPosition(), thisBase);
-				} else {
-					viterbi.addSignal(new ViterbiSignal(vArray.getPosition(), -6.0));
-					//System.err.println(currentChr + "\t" + vArray.getPosition() + "\t-1.1");
 				}
 			}
 			try {
@@ -198,9 +260,9 @@ public class SavvyHomozygosity
 		// Run the Viterbi algorithm with multiple transition penalties, to merge together large homozygous regions.
 		private List<Viterbi> viterbis;
 
-		public MultiViterbi(String chromosome) {
+		public MultiViterbi(String chromosome, double startTransition) {
 			viterbis = new ArrayList<Viterbi>();
-			for (double transition = 80.0; transition < 10000.0; transition = transition * 1.5) {
+			for (double transition = startTransition; transition < startTransition * 200.0; transition = transition * 1.5) {
 				viterbis.add(new Viterbi(chromosome, transition));
 			}
 		}

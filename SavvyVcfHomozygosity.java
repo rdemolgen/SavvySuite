@@ -118,7 +118,7 @@ public class SavvyVcfHomozygosity
 					viterbi.finish();
 				}
 				currentChr = contextChr;
-				viterbi = new SavvyHomozygosity.MultiViterbi(currentChr);
+				viterbi = new SavvyHomozygosity.MultiViterbi(currentChr, 80);
 			}
 			for (int sampleNo = 0; sampleNo < sampleNames.length; sampleNo++) {
 				boolean good = false;

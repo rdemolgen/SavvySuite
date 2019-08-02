@@ -1,26 +1,25 @@
-import htsjdk.samtools.*;
-import htsjdk.variant.variantcontext.*;
-import htsjdk.variant.vcf.*;
+package savvy;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-public class PrepareLinkageData
+import htsjdk.samtools.util.Log;
+import htsjdk.variant.variantcontext.Genotype;
+import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFFileReader;
+
+public class PrepareLinkageData extends AbstractApplication
 {
+	protected final static Log LOG=Log.getInstance(PrepareLinkageData.class);
+
 	public static final int WIDTH = 100000;
 	public static final Pattern INDEL = Pattern.compile(".*[ACGT][ACGT].*");
 	/*
@@ -36,20 +35,25 @@ public class PrepareLinkageData
 	 *   2.2. Otherwise, calculate linkage from VCF variants, produce score from reads.
 	 */
 
+	@Override
+	protected Log getLogger() {
+		return LOG;
+		}
 	/**
 	 * Process a VCF file containing whole genome genotypes for a large number of samples. The first argument is a VCF file containing common variants for lots of WGS samples.
 	 *
 	 * @author Matthew Wakeling
 	 */
-	public static void main(String[] args) throws IOException {
-		VCFFileReader vcf = new VCFFileReader(new File(args[0]));
-		boolean allVariants = (args.length > 1 ? "-all".equals(args[1]) : false);
+	@Override
+	public int doWork(final List<String> args) throws Exception {
+		try(VCFFileReader vcf = new VCFFileReader(new File(args.get(0)))) {
+		boolean allVariants = (args.size() > 1 ? "-all".equals(args.get(1)) : false);
 		List<String> vcfSampleNames = vcf.getFileHeader().getGenotypeSamples();
 		TreeMap<Integer, VariantArray> storedVariants = null;
 		String currentChr = "";
 		Output output = new Output(System.out);
-		for (VariantContext context : vcf) {
-			@SuppressWarnings("deprecation") String contextChr = context.getChr();
+		for (final VariantContext context : vcf) {
+			String contextChr = context.getContig();
 			if (!(currentChr.equals(contextChr))) {
 				storedVariants = new TreeMap<Integer, VariantArray>();
 				currentChr = contextChr;
@@ -92,6 +96,8 @@ public class PrepareLinkageData
 			}
 		}
 		output.finish();
+		}
+		return 0;
 	}
 
 	public static class Output
@@ -106,7 +112,7 @@ public class PrepareLinkageData
 		}
 
 		public void add(VariantArray context) throws IOException {
-			@SuppressWarnings("deprecation") String chromosome = context.getChr();
+			final String chromosome = context.getChr();
 			if (!chromosome.equals(chr)) {
 				finish();
 				chr = chromosome;

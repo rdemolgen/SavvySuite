@@ -1,3 +1,5 @@
+package savvy;
+
 import htsjdk.variant.variantcontext.*;
 import java.io.Serializable;
 import java.util.List;
@@ -9,13 +11,14 @@ import java.util.List;
  */
 public class VariantArray implements Serializable
 {
-	private String chromosome;
-	private int position;
+	private static final long serialVersionUID = 1L;
+	private final String chromosome;
+	private final int position;
 	private char wild, var;
 	private byte[] samples;
 
-	@SuppressWarnings("deprecation") public VariantArray(List<String> vcfSampleNames, VariantContext context) {
-		chromosome = context.getChr();
+	public VariantArray(final List<String> vcfSampleNames, final VariantContext context) {
+		chromosome = context.getContig();
 		position = context.getStart();
 		wild = context.getAlleles().get(0).toString().charAt(0);
 		var = context.getAlleles().get(1).toString().charAt(0);

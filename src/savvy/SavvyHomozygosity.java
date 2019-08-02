@@ -1,14 +1,12 @@
-import htsjdk.samtools.*;
-import htsjdk.variant.variantcontext.*;
-import htsjdk.variant.vcf.*;
+package savvy;
+
 import java.io.BufferedInputStream;
 import java.io.EOFException;
-import java.io.IOException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,8 +19,16 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-public class SavvyHomozygosity
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMRecordIterator;
+import htsjdk.samtools.SamReader;
+import htsjdk.samtools.SamReaderFactory;
+import htsjdk.samtools.util.Log;
+
+public class SavvyHomozygosity extends AbstractApplication
 {
+	protected final static Log LOG=Log.getInstance(SavvyHomozygosity.class);
+
 	public static final int WIDTH = 100000;
 	public static final int READ_LENGTH = 200;
 	public static final Map<String, String> addChrMap = new HashMap<String, String>();
@@ -40,7 +46,11 @@ public class SavvyHomozygosity
 		delChrMap.put("chrM", "MT");
 	}
 
-
+	@Override
+	protected Log getLogger() {
+		return LOG;
+		}
+	
 	/*
 	 * Method - We want to find homozygous regions using single off-target reads from the BAM file, using linkage disequilibrium.
 	 * The files are big, so we need to ensure performance is sensible.
@@ -59,25 +69,30 @@ public class SavvyHomozygosity
 	 *
 	 * @author Matthew Wakeling
 	 */
-	public static void main(String[] args) throws IOException, ClassNotFoundException {
+	public static void main(String[] args) {
+		new SavvyHomozygosity().instanceMainWithExit(args);
+		}
+	
+	@Override
+	public int doWork(List<String> args) throws Exception {
 		int variants = 0;
 		double startTransition = 80.0;
 		double negativeMult = 20.0;
 		// Variants are read from an ObjectInputStream as VariantArray objects.
-		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
-		BamReader bamReader = new BamReader(args[1]);
+		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args.get(0))));
+		BamReader bamReader = new BamReader(args.get(1));
 		boolean outputPoints = false;
 		boolean gotTranslation = false;
 		Map<String, String> translation = null;
-		for (int i = 2; i < args.length; i++) {
-			if ("-points".equals(args[i])) {
+		for (int i = 2; i < args.size(); i++) {
+			if ("-points".equals(args.get(i))) {
 				outputPoints = true;
-			} else if ("-trans".equals(args[i])) {
+			} else if ("-trans".equals(args.get(i))) {
 				i++;
-				startTransition = Double.parseDouble(args[i]);
-			} else if ("-neg".equals(args[i])) {
+				startTransition = Double.parseDouble(args.get(i));
+			} else if ("-neg".equals(args.get(i))) {
 				i++;
-				negativeMult = Double.parseDouble(args[i]);
+				negativeMult = Double.parseDouble(args.get(i));
 			}
 		}
 		TreeMap<Integer, VariantArray> storedVariants = null;
@@ -184,6 +199,7 @@ public class SavvyHomozygosity
 		if (viterbi != null) {
 			viterbi.finish();
 		}
+		return 0;
 	}
 
 	public static class BamReader

@@ -1,28 +1,31 @@
-import htsjdk.samtools.*;
-import htsjdk.variant.variantcontext.*;
-import htsjdk.variant.vcf.*;
+package savvy;
+
 import java.io.BufferedInputStream;
 import java.io.EOFException;
-import java.io.IOException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-public class SavvyVcfHomozygosity
+import htsjdk.samtools.util.Log;
+import htsjdk.variant.variantcontext.Genotype;
+import htsjdk.variant.variantcontext.GenotypeType;
+import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFFileReader;
+
+public class SavvyVcfHomozygosity extends AbstractApplication
 {
+	protected final static Log LOG=Log.getInstance(SavvyVcfHomozygosity.class);
+
 	// This is the number of variants either side of the current variant that is inspected to calculate homozygosity.
 	public static final int BLOCK = 20;
 	// This is the maximum number of heterozygous variants allowed in a block of variants for the block to still be homozygous.
@@ -31,29 +34,40 @@ public class SavvyVcfHomozygosity
 	public static final int POT_MAXHET = 2;
 	public static final int[] CHR_SIZES = new int[] {249250621, 243199373, 198022430, 191154276, 180915260, 171115067, 159138663, 146364022, 141213431, 135534747, 135006516, 133851895, 115169878, 107349540, 102531392, 90354753, 81195210, 78077248, 59128983, 63025520, 48129895, 51304566};
 
+	
+	@Override
+	protected Log getLogger() {
+		return LOG;
+		}
+	
 	/**
 	 * Process a sample VCF file to generate a homozygosity mapping. The first argument is a dump of common variants from WGS samples. The second argument is a VCF file to analyse.
 	 *
 	 * @author Matthew Wakeling
 	 */
-	public static void main(String[] args) throws IOException, ClassNotFoundException {
-		Map<String, Map<Integer, VariantArray>> ref = loadReference(args[0]);
+
+	public static void main(String[] args) {
+		new SavvyVcfHomozygosity().instanceMainWithExit(args);
+		}
+	@Override
+	public int doWork(List<String> args) throws Exception {
+		Map<String, Map<Integer, VariantArray>> ref = loadReference(args.get(0));
 		HardyWeinbergLimit hardy = new HardyWeinbergLimit(ref.values().iterator().next().values().iterator().next().getSamples().length, 0.0001);
-		String vcfFile = args[1];
+		String vcfFile = args.get(1);
 		TreeSet<String> sampleNameList = new TreeSet<String>();
 		boolean bases = false;
 		boolean combinations = false;
 		boolean parents = false;
-		for (int i = 2; i < args.length; i++) {
-			if ("-b".equals(args[i])) {
+		for (int i = 2; i < args.size(); i++) {
+			if ("-b".equals(args.get(i))) {
 				bases = true;
-			} else if ("-com".equals(args[i])) {
+			} else if ("-com".equals(args.get(i))) {
 				combinations = true;
 				bases = true;
-			} else if ("-p".equals(args[i])) {
+			} else if ("-p".equals(args.get(i))) {
 				parents = true;
 			} else {
-				sampleNameList.add(args[i]);
+				sampleNameList.add(args.get(i));
 			}
 		}
 		if (combinations) {
@@ -95,6 +109,7 @@ public class SavvyVcfHomozygosity
 			doHomozygosity(vcfFile, sampleNames, bases, parents, true, ref, hardy);
 			System.out.println("");
 		}
+		return 0;
 	}
 
 	public static void doHomozygosity(String vcfFile, String[] sampleNames, boolean bases, boolean parents, boolean printVariantCounts, Map<String, Map<Integer, VariantArray>> ref, HardyWeinbergLimit hardy) {
@@ -118,7 +133,7 @@ public class SavvyVcfHomozygosity
 					viterbi.finish();
 				}
 				currentChr = contextChr;
-				viterbi = new SavvyHomozygosity.MultiViterbi(currentChr);
+				viterbi = new SavvyHomozygosity.MultiViterbi(currentChr, 80);
 			}
 			for (int sampleNo = 0; sampleNo < sampleNames.length; sampleNo++) {
 				boolean good = false;

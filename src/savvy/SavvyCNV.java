@@ -1,5 +1,6 @@
+package savvy;
+
 import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import htsjdk.samtools.util.Log;
+
 /**
  * Reads a set of CoverageBinner files, and uses a Hidden Markov Model to find copy number variants.
  * This will use the off-target reads.
@@ -20,11 +23,21 @@ import java.util.TreeMap;
  * The data is normalised using singular value decomposition.
  *
  * @author Matthew Wakeling
+ * 
+ * 2019-08-02 Pierre Lindenbaum @yokofakun moved to AbstractApplication
  */
 public class SavvyCNV
+	extends AbstractApplication
 {
-	public static void main(String[] args) throws Exception {
-		List<String> samples = new ArrayList<String>();
+	protected final static Log LOG=Log.getInstance(SavvyCNV.class);
+
+	@Override
+	protected Log getLogger() {
+		return LOG;
+		}
+	@Override
+	public int doWork(List<String> args) throws Exception {
+		
 		int divider = 1000000;
 		double cutoff = 0.25;
 		double cutoffV = 5.25;
@@ -42,80 +55,95 @@ public class SavvyCNV
 		int svsBlanked = 5;
 		int minReads = 20;
 		int errorType = 0; // 0 means multiply, 1 means add, 2 means poisson.
-		for (int i = 0; i < args.length; i++) {
-			if ("-d".equals(args[i])) {
-				i++;
-				divider = Integer.parseInt(args[i]);
-			} else if ("-cutoff".equals(args[i])) {
-				i++;
-				cutoff = Double.parseDouble(args[i]);
-			} else if ("-trans".equals(args[i])) {
-				i++;
-				transitionProb = Double.parseDouble(args[i]);
-			} else if ("-g".equals(args[i])) {
+		int optind=0;
+		
+		while(optind < args.size()) {
+			if ("-d".equals(args.get(optind))) {
+				optind++;
+				divider = Integer.parseInt(args.get(optind));
+			} else if ("-cutoff".equals(args.get(optind))) {
+				optind++;
+				cutoff = Double.parseDouble(args.get(optind));
+			} else if ("-trans".equals(args.get(optind))) {
+				optind++;
+				transitionProb = Double.parseDouble(args.get(optind));
+			} else if ("-g".equals(args.get(optind))) {
 				graph = true;
-			} else if ("-a".equals(args[i])) {
+			} else if ("-a".equals(args.get(optind))) {
 				allGraphs = true;
 				graph = true;
-			} else if ("-cytoBands".equals(args[i])) {
-				i++;
-				cytoBands = args[i];
-			} else if ("-minProb".equals(args[i])) {
-				i++;
-				minProb = exp(-Double.parseDouble(args[i]));
-			} else if ("-dump".equals(args[i])) {
+			} else if ("-cytoBands".equals(args.get(optind))) {
+				optind++;
+				cytoBands = args.get(optind);
+			} else if ("-minProb".equals(args.get(optind))) {
+				optind++;
+				minProb = exp(-Double.parseDouble(args.get(optind)));
+			} else if ("-dump".equals(args.get(optind))) {
 				dump = true;
-			} else if ("-errorModel".equals(args[i])) {
+			} else if ("-errorModel".equals(args.get(optind))) {
 				errorModel = true;
-			} else if ("-intervals".equals(args[i])) {
+			} else if ("-intervals".equals(args.get(optind))) {
 				intervals = true;
-			} else if ("-mosaic".equals(args[i])) {
+			} else if ("-mosaic".equals(args.get(optind))) {
 				mosaic = true;
-				System.err.println("Using mosaic mode");
-			} else if ("-size".equals(args[i])) {
-				i++;
-				graphSize = args[i];
-			} else if ("-fontscale".equals(args[i])) {
-				i++;
-				fontScale = Double.parseDouble(args[i]);
-			} else if ("-sv".equals(args[i])) {
-				i++;
-				svsBlanked = Integer.parseInt(args[i]);
-			} else if ("-minReads".equals(args[i])) {
-				i++;
-				minReads = Integer.parseInt(args[i]);
-			} else if ("-addError".equals(args[i])) {
+				getLogger().info("Using mosaic mode");
+			} else if ("-size".equals(args.get(optind))) {
+				optind++;
+				graphSize = args.get(optind);
+			} else if ("-fontscale".equals(args.get(optind))) {
+				optind++;
+				fontScale = Double.parseDouble(args.get(optind));
+			} else if ("-sv".equals(args.get(optind))) {
+				optind++;
+				svsBlanked = Integer.parseInt(args.get(optind));
+			} else if ("-minReads".equals(args.get(optind))) {
+				optind++;
+				minReads = Integer.parseInt(args.get(optind));
+			} else if ("-addError".equals(args.get(optind))) {
 				errorType = 1;
-			} else if ("-poisson".equals(args[i])) {
+			} else if ("-poisson".equals(args.get(optind))) {
 				errorType = 2;
-			} else {
-				samples.add(args[i]);
+			} else if(args.get(optind).equals("--")) {
+				++optind;
+				break;
+				}
+			else if(args.get(optind).startsWith("-")) {
+				getLogger().error("unknown option "+args.get(optind));
+				return -1;
+				}
+			else
+				{
+				break;
+				}
+			optind++;
 			}
-		}
+		
+		final List<String> samples = args.subList(optind, args.size());
+		
 		double logTransProb = log(transitionProb);
-		//System.err.println("Transition probability " + logTransProb);
-		System.err.println("Processing " + samples.size() + " samples");
-		System.err.println("Using divider of " + divider);
-		System.err.println("Using noise cutoff of " + cutoff);
-		System.err.println("Using transition probability of " + transitionProb);
-		System.err.println("Blanking " + svsBlanked + " singular vectors");
-		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
+		//getLogger().info("Transition probability " + logTransProb);
+		getLogger().info("Processing " + samples.size() + " samples");
+		getLogger().info("Using divider of " + divider);
+		getLogger().info("Using noise cutoff of " + cutoff);
+		getLogger().info("Using transition probability of " + transitionProb);
+		getLogger().info("Blanking " + svsBlanked + " singular vectors");
+		getLogger().info("Informative genome chunks have an average of " + minReads + " reads or more");
 		if (errorType != 0) {
-			System.err.println("Using " + (errorType == 1 ? "additive" : "poisson") + " error model");
+			getLogger().info("Using " + (errorType == 1 ? "additive" : "poisson") + " error model");
 		}
 		if (svsBlanked >= samples.size()) {
-			System.err.println(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
-			System.err.println("Cannot process samples.");
-			System.exit(1);
+			getLogger().info(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
+			getLogger().error("Cannot process samples.");
+			return -1;
 		}
 		if (svsBlanked * 2 > samples.size()) {
-			System.err.println(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
+			getLogger().info(svsBlanked + " singular vectors being removed, but only " + samples.size() + " samples - try reducing the number of singular vectors with the -sv option, or increase the number of samples.");
 		}
 
 		long[] totals = new long[samples.size()];
 		Map<String, long[][]> arraysMap = new TreeMap<String, long[][]>();
 		for (int i = 0; i < samples.size(); i++) {
-			System.err.println("Reading " + i + " " + samples.get(i));
+			getLogger().info("Reading " + i + " " + samples.get(i));
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(samples.get(i)));
 			@SuppressWarnings("unchecked") LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
 			for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
@@ -147,7 +175,7 @@ public class SavvyCNV
 			in.close();
 		}
 		
-		System.err.println("Normalising");
+		getLogger().info("Normalising");
 		int totalPositions = 0;
 		for (String chr : arraysMap.keySet()) {
 			long[][] array = arraysMap.get(chr);
@@ -165,7 +193,7 @@ public class SavvyCNV
 		for (int i = 0; i < samples.size(); i++) {
 			total += totals[i];
 		}
-		System.err.println("Average reads in each bucket: " + ((total * 1.0) / samples.size() / totalPositions));
+		getLogger().info("Average reads in each bucket: " + ((total * 1.0) / samples.size() / totalPositions));
 		PrintStream out = new PrintStream(new BufferedOutputStream(System.out));
 		// Work out which chunks of the genome we want to do SVD on.
 		List<String> chunkChromosomes = new ArrayList<String>();
@@ -197,7 +225,7 @@ public class SavvyCNV
 				start++;
 			}
 		}
-		System.err.println("Number of genome chunks: " + chunkChromosomes.size());
+		getLogger().info("Number of genome chunks: " + chunkChromosomes.size());
 		if (intervals) {
 			for (int o = 0; o < chunkChromosomes.size(); o++) {
 				String chr = chunkChromosomes.get(o);
@@ -236,7 +264,7 @@ public class SavvyCNV
 		long time1 = System.currentTimeMillis();
 		Jama.SingularValueDecomposition decomp = new Jama.SingularValueDecomposition(A);
 		long time2 = System.currentTimeMillis();
-		System.err.println("Performed SVD in " + (time2 - time1) + "ms");
+		getLogger().info("Performed SVD in " + (time2 - time1) + "ms");
 		Jama.Matrix S = decomp.getS();
 		Process gnuplot = null;
 		SplitPrintStream pipe = null;
@@ -401,9 +429,9 @@ public class SavvyCNV
 				validChunks++;
 			}
 		}
-		System.err.println("Number of low-noise genome chunks: " + validChunks);
+		getLogger().info("Number of low-noise genome chunks: " + validChunks);
 		totalPosVariance = totalPosVariance / validChunks;
-		System.err.println("Average noise: " + Math.sqrt(totalPosVariance));
+		getLogger().info("Average noise: " + Math.sqrt(totalPosVariance));
 		for (int sampleNo = 0; sampleNo < samples.size(); sampleNo++) {
 			String tempFileName = samples.get(sampleNo) + ".tempFile" + Math.random();
 			PrintWriter depthFile = null;
@@ -473,7 +501,7 @@ public class SavvyCNV
 						dupCount++;
 					}
 				}
-				System.err.println(Math.sqrt(sampleVariance) + "\t" + Math.sqrt(newSampleVariance) + "\t" + delCount + "\t" + dupCount + "\t" + totals[sampleNo] + "\t" + samples.get(sampleNo));
+				getLogger().info(Math.sqrt(sampleVariance) + "\t" + Math.sqrt(newSampleVariance) + "\t" + delCount + "\t" + dupCount + "\t" + totals[sampleNo] + "\t" + samples.get(sampleNo));
 				if (graph) {
 					depthFile.flush();
 					depthFile.close();
@@ -496,7 +524,8 @@ public class SavvyCNV
 			pipe.close();
 			gnuplot.waitFor();
 		}
-	}
+		return 0;
+		}
 
 	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance, double[][] aArray, int errorType, double[][] eArray) {
 		boolean needBlankLine = false;
@@ -577,7 +606,7 @@ public class SavvyCNV
 					//	newDelProb = -3;
 					//	newDupProb = -3;
 					//}
-					//System.err.println("New probabilities\t" + val + "\t" + stddev + "\t" + newDelProb + "\t" + newNorProb + "\t" + newDupProb);
+					//getLogger().info("New probabilities\t" + val + "\t" + stddev + "\t" + newDelProb + "\t" + newNorProb + "\t" + newDupProb);
 					double fromDel = delProb + newDelProb;
 					double fromNor = norProb + logTransProb + newDelProb;
 					double fromDup = dupProb + logTransProb + newDelProb;
@@ -638,7 +667,7 @@ public class SavvyCNV
 			}
 			delProb = delProb + logTransProb;
 			dupProb = dupProb + logTransProb;
-			//System.err.println("Probabilities\t" + samples.get(sampleNo) + "\t" + chr + "\t" + delProb + "\t" + norProb + "\t" + dupProb);
+			//getLogger().info("Probabilities\t" + samples.get(sampleNo) + "\t" + chr + "\t" + delProb + "\t" + norProb + "\t" + dupProb);
 			State evalState = (delProb > norProb) && (delProb > dupProb) ? delState : (norProb > dupProb ? norState : dupState);
 			ArrayList<State> states = new ArrayList<State>();
 			while (evalState != null) {
@@ -719,7 +748,7 @@ public class SavvyCNV
 					this.proportion = proportion + previous.proportion;
 					this.count = previous.count + 1;
 					this.previous = previous.previous;
-					//System.err.println("New state(" + state + "), prob " + this.prob + "\t" + prob);
+					//getLogger().info("New state(" + state + "), prob " + this.prob + "\t" + prob);
 				}
 			}
 		}
@@ -786,5 +815,9 @@ public class SavvyCNV
 				stream.close();
 			}
 		}
+	}
+	
+	public static void main(String[] args) {
+		new SavvyCNV().instanceMainWithExit(args);
 	}
 }

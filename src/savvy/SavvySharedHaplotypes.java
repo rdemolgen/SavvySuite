@@ -1,6 +1,7 @@
+package savvy;
+
 import htsjdk.samtools.*;
-import htsjdk.variant.variantcontext.*;
-import htsjdk.variant.vcf.*;
+import htsjdk.samtools.util.Log;
 import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -8,7 +9,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -19,24 +19,37 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-public class SavvySharedHaplotypes
+public class SavvySharedHaplotypes extends AbstractApplication
 {
+	protected final static Log LOG=Log.getInstance(SavvySharedHaplotypes.class);
+
 	public static final int WIDTH = 100000;
 	public static final int READ_LENGTH = 200;
 
+	@Override
+	protected Log getLogger() {
+		return LOG;
+		}
+	
 	/**
 	 * Process a sample to detect homozygous regions or shared haplotypes. The first argument is a VCF file containing common variants for lots of WGS samples. The second argument is a BAM file containing the sample to be analysed. The optional third argument is the BAM file of the other sample.
 	 *
 	 * @author Matthew Wakeling
 	 */
-	public static void main(String[] args) throws IOException, ClassNotFoundException {
+	public static void main(String[] args) {
+		new SavvySharedHaplotypes().instanceMainWithExit(args);
+	}
+	
+	
+	@Override
+	public int doWork(List<String> args) throws Exception {
 		int variants = 0;
-		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
-		BamReader bamReader = new BamReader(args[1]);
+		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args.get(0))));
+		BamReader bamReader = new BamReader(args.get(1));
 		BamReader bamReader2 = null;
 		double negativeMultiplier = 20.0; // This is how much less frequent the discordant read pairs must be before calling a discordant region.
-		if (args.length > 2) {
-			bamReader2 = new BamReader(args[2]);
+		if (args.size() > 2) {
+			bamReader2 = new BamReader(args.get(2));
 			negativeMultiplier = 10.0;
 		}
 		TreeMap<Integer, VariantArray> storedVariants = null;
@@ -115,6 +128,7 @@ public class SavvySharedHaplotypes
 		if (viterbi != null) {
 			viterbi.finish();
 		}
+		return 0;
 	}
 
 	public static void createSignal(int wildCount, int varCount, TreeMap<Integer, Boolean> storedBases, TreeMap<Integer, VariantArray> storedVariants, VariantArray vArray, Viterbi viterbi, double negativeMultiplier, String currentChr) {

@@ -1,3 +1,5 @@
+package savvy;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -6,32 +8,41 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
+import htsjdk.samtools.util.Locatable;
+
 /**
  * Object representing an interval on a chromosome.
  *
  * @author Matthew Wakeling
  */
-public class Interval<T> implements Comparable<Interval<?>>
+public class Interval<T> implements Comparable<Interval<?>>, Locatable
 {
-	private String chromosome;
+	private final String chromosome;
 	private int start, end;
 	private T data;
 
-	public Interval(String chromosome, int start, int end, T data) {
+	public Interval(final String chromosome, int start, int end, T data) {
 		this.chromosome = chromosome;
 		this.start = start;
 		this.end = end;
 		this.data = data;
 	}
 
+	@Override
+	public final String getContig() {
+		return getChromosome();
+		}
+	
 	public String getChromosome() {
 		return chromosome;
 	}
 
+	@Override
 	public int getStart() {
 		return start;
 	}
 
+	@Override
 	public int getEnd() {
 		return end;
 	}
@@ -40,23 +51,23 @@ public class Interval<T> implements Comparable<Interval<?>>
 		return data;
 	}
 
-	public void setData(T data) {
+	public void setData(final T data) {
 		this.data = data;
 	}
 
-	public int compareTo(Interval<?> i) {
+	public int compareTo(final Interval<?> i) {
 		if (!chromosome.equals(i.chromosome)) {
-			int num = Integer.MAX_VALUE;
-			int inum = Integer.MAX_VALUE;
+			int num;
+			int inum;
 			try {
 				num = Integer.parseInt(chromosome);
 			} catch (NumberFormatException e) {
-				// Not a number
+				 num = Integer.MAX_VALUE;
 			}
 			try {
 				inum = Integer.parseInt(i.chromosome);
 			} catch (NumberFormatException e) {
-				// Not a number
+				 inum = Integer.MAX_VALUE;
 			}
 			if (num > inum) {
 				return 1;
@@ -64,13 +75,8 @@ public class Interval<T> implements Comparable<Interval<?>>
 				return -1;
 			}
 			return chromosome.compareTo(i.chromosome);
-		} else if (start > i.start) {
-			return 1;
-		} else if (start < i.start) {
-			return -1;
-		} else {
-			return 0;
 		}
+		return Integer.compare(this.start, i.start);
 	}
 
 	public String toString() {

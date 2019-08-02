@@ -4,42 +4,51 @@ Suite of tools for analysing off-target reads to find CNVs, homozygous regions, 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
 
 ## Running Java
-This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. All operations require this GATK jar and the SavvySuite java to be in the Java classpath, in order for Java to find it.
+This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK 3.* Jar. All operations require this GATK 3.* jar and the SavvySuite java to be in the Java classpath, in order for Java to find it.
 
-This can be done in two ways. The first option is to set the CLASSPATH environment variable:
+
+
+## Compiling
+
+run the provided `Makefile` by specifying the path to the GATK3.* jar, for example:
+
 ```
-export CLASSPATH=/path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory
+make GATK=~/package/gatk/3.8/GenomeAnalysisTK.jar 
 ```
-The ":" character separates the two parts of this path, to specify that code can be found in the two places. The second option is to specify the "-cp" option every time you run java, like this:
+
+This will generate a jar file named `savvysuite.jar`
+
+You can then run any SavvySuite sub-program using the following syntax:
+
 ```
-java -cp /path/to/GenomeAnalysisTK.jar:/path/to/SavvySuite/directory blah blah blah
+java -jar savvysuite.jar SUB-PROGRAM-NAME
 ```
-For all subsequent code fragments, where "java" or "javac" is specified, it is assumed that the classpath is correctly configured as specified above, either by adding the "-cp" option or using the CLASSPATH environment variable.
+
+for example:
+
+```
+java -jar savvysuite.jar  CoverageBinner
+```
 
 If you have a large server, it is also sensible to add the -XX:ParallelGCThreads=2 -XX:ConcGCThreads=2 options to java, to prevent it creating too many garbage collection threads. This is a small performance enhancement, and is done like this:
 ```
 java -XX:ParallelGCThreads=2 -XX:ConcGCThreads=2 blah blah blah
 ```
 
-## Compiling
-Compiling the code is then done by:
-```
-javac *.java
-```
-in the SavvySuite directory.
 
 ## Usage
-This suite contains three separate tools for analysing off-target reads.
+This suite contains separate tools for analysing off-target reads.
+
 ### SavvyCNV
 This software analyses the read depth of off-target reads to detect CNVs. It requires a reasonable number of samples sequenced using the same method. (Don't mix samples sequenced using different methods - it won't work well.) The sample data must be provided in aligned BAM files. First, each BAM file must be converted to a coverage summary file, with the following command:
 ```
-java -Xmx1g CoverageBinner sample.bam >sample.coverageBinner
+java -Xmx1g -jar savvysuite.jar CoverageBinner sample.bam >sample.coverageBinner
 ```
 This step can be performed in parallel on each sample, and will produce a file approximately 7MB in size. The operation requires very little RAM.
 
 To perform the analysis, the following command should be used:
 ```
-java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.txt
+java -Xmx30g  -jar savvysuite.jar SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.txt
 ```
 The <size> parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected.
 In addition, the following arguments can be provided:
@@ -76,26 +85,26 @@ The log_messages.txt file contains log messages, and also a summary of each samp
 ### PrepareLinkageData
 This software is used to pre-process linkage disequilibrium data, to get it into a format that can be read quickly by SavvyHomozygosity and SavvySharedHaplotypes. It requires a vcf file containing whole genome genotype data for many samples (a few hundred would be appropriate). It can be run as follows:
 ```
-java -Xmx5g PrepareLinkageData whole_genome.vcf >linkage_data
+java -Xmx5g  -jar savvysuite.jar PrepareLinkageData whole_genome.vcf >linkage_data
 ```
 
 ### SavvyHomozygosity
 This software analyses the off-target reads to determine homozygous regions of the genome for a single sample. It can be run as follows:
 ```
-java -Xmx5g SavvyHomozygosity linkage_data sample.bam >sample.bed
+java -Xmx5g  -jar savvysuite.jar SavvyHomozygosity linkage_data sample.bam >sample.bed
 ```
 The sample.bam contains the sample targeted sequencing data. The software produces a BED file containing homozygous regions. The analysis requires at least a million off-target reads, and preferably more, so a sample with three million reads and about 50% off-target is about right. The software searches for read pairs, so the amount of detail that can be extracted (and consequently the time taken) is proportional to the square of the number of off-target reads. Samples with too few reads do not produce a valid result.
 
 ### SavvySharedHaplotypes
 This software analyses the off-target reads from two samples to determine areas with homozygous shared haplotypes, using the same methodology as SavvyHomozygosity. It can be run as follows:
 ```
-java -Xmx5g SavvySharedHomozygosity linkage_data sample1.bam sample2.bam >shared.bed
+java -Xmx5g  -jar savvysuite.jar SavvySharedHomozygosity linkage_data sample1.bam sample2.bam >shared.bed
 ```
 
 ### SavvyVcfHomozygosity
 This software analyses a VCF file to determine homozygous regions of the genome. It can be run as follows:
 ```
-java -Xmx5g SavvyVcfHomozygosity linkage_data input.vcf (options) (samplenames) >sample.bed
+java -Xmx5g  -jar savvysuite.jarSavvyVcfHomozygosity linkage_data input.vcf (options) (samplenames) >sample.bed
 ```
 If a single samplename is used with no options, then the output will be a BED file containing homozygous regions for the sample. If multiple samplenames are used, then only regions that are homozygous in all samples are output. Adding the "-p" option alters this behaviour, so that regions where all the named samples share a haplotype are output.
 

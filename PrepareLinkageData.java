@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPOutputStream;
 
 public class PrepareLinkageData
 {
@@ -102,7 +103,7 @@ public class PrepareLinkageData
 		private static int count = 0;
 
 		public Output(OutputStream o) throws IOException {
-			this.out = new ObjectOutputStream(new BufferedOutputStream(o));
+			this.out = new ObjectOutputStream(new BufferedOutputStream(new GZIPOutputStream(o)));
 		}
 
 		public void add(VariantArray context) throws IOException {

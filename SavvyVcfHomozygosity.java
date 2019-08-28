@@ -20,6 +20,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 public class SavvyVcfHomozygosity
 {
@@ -253,7 +255,12 @@ public class SavvyVcfHomozygosity
 	}
 
 	public static Map<String, Map<Integer, VariantArray>> loadReference(String fileName) throws IOException, ClassNotFoundException {
-		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(fileName)));
+		ObjectInputStream vcf = null;
+		try {
+			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(fileName))));
+		} catch (ZipException e) {
+			vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(fileName)));
+		}
 		HashMap<String, Map<Integer, VariantArray>> ref = new HashMap<String, Map<Integer, VariantArray>>();
 		boolean hasMoreVariants = true;
 		VariantArray vArray = null;

@@ -20,6 +20,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 public class SavvyHomozygosity
 {
@@ -64,7 +66,12 @@ public class SavvyHomozygosity
 		double startTransition = 80.0;
 		double negativeMult = 20.0;
 		// Variants are read from an ObjectInputStream as VariantArray objects.
-		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
+		ObjectInputStream vcf = null;
+		try {
+			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(args[0]))));
+		} catch (ZipException e) {
+			vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
+		}
 		BamReader bamReader = new BamReader(args[1]);
 		boolean outputPoints = false;
 		boolean gotTranslation = false;

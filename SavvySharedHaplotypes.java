@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 public class SavvySharedHaplotypes
 {
@@ -31,7 +33,12 @@ public class SavvySharedHaplotypes
 	 */
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		int variants = 0;
-		ObjectInputStream vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
+		ObjectInputStream vcf = null;
+		try {
+			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(args[0]))));
+		} catch (ZipException e) {
+			vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(args[0])));
+		}
 		BamReader bamReader = new BamReader(args[1]);
 		BamReader bamReader2 = null;
 		double negativeMultiplier = 20.0; // This is how much less frequent the discordant read pairs must be before calling a discordant region.

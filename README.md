@@ -3,6 +3,15 @@ Suite of tools for analysing off-target reads to find CNVs, homozygous regions, 
 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
 
+To cite this software, please use the following references. For SavvyCNV, use:
+> https://www.biorxiv.org/content/10.1101/617605v1
+
+For all other parts of SavvySuite, cite the ASHG conference presentation:
+> Wakeling, MN, De Franco E, Hattersley AT, Ellard S. Making the most of targeted sequencing: detecting CNVs and homozygous regions using offtarget reads with SavvyCNV. 67th Annual Meeting of the American Society of Human Genetics. Orlando, FL; 17–21 October 2017.
+
+and if desired, cite this web site too:
+> Wakeling MN. SavvySuite. 2018. https://github.com/rdemolgen/SavvySuite.
+
 ## Running Java
 This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. All operations require this GATK jar and the SavvySuite java to be in the Java classpath, in order for Java to find it.
 

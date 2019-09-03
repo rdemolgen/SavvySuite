@@ -32,6 +32,7 @@ public class SavvyVcfHomozygosity
 	public static final int POT_BLOCK = 35;
 	public static final int POT_MAXHET = 2;
 	public static final int[] CHR_SIZES = new int[] {249250621, 243199373, 198022430, 191154276, 180915260, 171115067, 159138663, 146364022, 141213431, 135534747, 135006516, 133851895, 115169878, 107349540, 102531392, 90354753, 81195210, 78077248, 59128983, 63025520, 48129895, 51304566};
+	public static final Pattern CHROM = Pattern.compile("^[0-9X]*$|^chr[0-9X]*$");
 
 	/**
 	 * Process a sample VCF file to generate a homozygosity mapping. The first argument is a dump of common variants from WGS samples. The second argument is a VCF file to analyse.
@@ -160,7 +161,7 @@ public class SavvyVcfHomozygosity
 						//System.err.println("allAlleles2: " + allAlleles2);
 						if ((allAlleles2.size() == 1) && (!homRef)) {
 							het = false;
-							if (Pattern.matches("^[0-9]*$", context.getChr())) {
+							if (CHROM.matcher(context.getChr()).matches()) {
 								sameCount++;
 								int chrInt = Integer.parseInt(context.getChr());
 								chrSameCount[chrInt - 1]++;
@@ -168,7 +169,7 @@ public class SavvyVcfHomozygosity
 							//System.out.print("0");
 						} else if ((allAlleles != null) && (allAlleles.isEmpty())) {
 							het = true;
-							if (Pattern.matches("^[0-9]*$", context.getChr())) {
+							if (CHROM.matcher(context.getChr()).matches()) {
 								oppositeCount++;
 								int chrInt = Integer.parseInt(context.getChr());
 								chrOppositeCount[chrInt - 1]++;
@@ -187,18 +188,24 @@ public class SavvyVcfHomozygosity
 							if (GenotypeType.HET.equals(type)) {
 								good = true;
 								het = true;
-								if (Pattern.matches("^[0-9]*$", context.getChr())) {
+								if (CHROM.matcher(context.getChr()).matches()) {
 									oppositeCount++;
-									int chrInt = Integer.parseInt(context.getChr());
-									chrOppositeCount[chrInt - 1]++;
+									try {
+										int chrInt = Integer.parseInt(context.getChr());
+										chrOppositeCount[chrInt - 1]++;
+									} catch (NumberFormatException e) {
+									}
 								}
 								//System.err.println(context.getChr() + "\t" + context.getStart() + "\t0");
 							} else if (GenotypeType.HOM_VAR.equals(type)) {
 								good = true;
-								if (Pattern.matches("^[0-9]*$", context.getChr())) {
+								if (CHROM.matcher(context.getChr()).matches()) {
 									sameCount++;
-									int chrInt = Integer.parseInt(context.getChr());
-									chrSameCount[chrInt - 1]++;
+									try {
+										int chrInt = Integer.parseInt(context.getChr());
+										chrSameCount[chrInt - 1]++;
+									} catch (NumberFormatException e) {
+									}
 								}
 								//System.err.println(context.getChr() + "\t" + context.getStart() + "\t1");
 							}

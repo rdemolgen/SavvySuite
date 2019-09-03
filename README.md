@@ -78,7 +78,7 @@ This software is used to pre-process linkage disequilibrium data, to get it into
 ```
 java -Xmx5g PrepareLinkageData whole_genome.vcf >linkage_data
 ```
-If you have enough genomes sequenced from a similar ethnicity to the samples analysed using targeted or exome sequencing, then use the above. If not, then you can download a pre-prepared data file from https://mega.nz/#!tpoWXa6Y!2yjhf1lym3JJjm7r3UQKuEhekQTy6HOBexz-0OVq-F8 which was converted from the 1000 genomes data.
+If you have enough genomes sequenced from a similar ethnicity to the samples analysed using targeted or exome sequencing, then use the above. If not, then you can download a pre-prepared data file from https://mega.nz/#!lppUyCpZ!LM2CrnCUZFl3O-WeARQtWdMPVxnV93vQ4f0ZDdSUaak which was converted from the 1000 genomes data.
 
 ### SavvyHomozygosity
 This software analyses the off-target reads to determine homozygous regions of the genome for a single sample. It can be run as follows:

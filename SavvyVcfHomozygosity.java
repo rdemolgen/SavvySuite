@@ -32,7 +32,7 @@ public class SavvyVcfHomozygosity
 	public static final int POT_BLOCK = 35;
 	public static final int POT_MAXHET = 2;
 	public static final int[] CHR_SIZES = new int[] {249250621, 243199373, 198022430, 191154276, 180915260, 171115067, 159138663, 146364022, 141213431, 135534747, 135006516, 133851895, 115169878, 107349540, 102531392, 90354753, 81195210, 78077248, 59128983, 63025520, 48129895, 51304566};
-	public static final Pattern CHROM = Pattern.compile("^[0-9X]*$|^chr[0-9X]*$");
+	public static final Pattern NUM_CHROM = Pattern.compile("^[0-9]*$|^chr[0-9]*$");
 
 	/**
 	 * Process a sample VCF file to generate a homozygosity mapping. The first argument is a dump of common variants from WGS samples. The second argument is a VCF file to analyse.
@@ -112,9 +112,27 @@ public class SavvyVcfHomozygosity
 		int[] chrOppositeCount = new int[22];
 		int[] chrSameCount = new int[22];
 		String currentChr = "";
+		Map<String, String> translation = null;
+		boolean needTranslation = true;
 		SavvyHomozygosity.MultiViterbi viterbi = null;
 		for (VariantContext context : reader) {
 			String contextChr = context.getChr();
+			if (needTranslation) {
+				boolean vcfChr = contextChr.startsWith("chr");
+				boolean refChr = ref.keySet().iterator().next().startsWith("chr");
+				if (vcfChr && (!refChr)) {
+					translation = SavvyHomozygosity.delChrMap;
+					System.err.println("Translating chromosome names - VCF file has chrN, but linkage data has N");
+				} else if (refChr && (!vcfChr)) {
+					translation = SavvyHomozygosity.addChrMap;
+					System.err.println("Translating chromosome names - VCF file has N, but linkage data has chrN");
+				}
+				needTranslation = false;
+			}
+			String translatedChr = contextChr;
+			if (translation != null) {
+				translatedChr = translation.get(contextChr);
+			}
 			if (!(currentChr.equals(contextChr))) {
 				if (viterbi != null) {
 					viterbi.finish();
@@ -161,7 +179,7 @@ public class SavvyVcfHomozygosity
 						//System.err.println("allAlleles2: " + allAlleles2);
 						if ((allAlleles2.size() == 1) && (!homRef)) {
 							het = false;
-							if (CHROM.matcher(context.getChr()).matches()) {
+							if (NUM_CHROM.matcher(context.getChr()).matches()) {
 								sameCount++;
 								int chrInt = Integer.parseInt(context.getChr());
 								chrSameCount[chrInt - 1]++;
@@ -169,7 +187,7 @@ public class SavvyVcfHomozygosity
 							//System.out.print("0");
 						} else if ((allAlleles != null) && (allAlleles.isEmpty())) {
 							het = true;
-							if (CHROM.matcher(context.getChr()).matches()) {
+							if (NUM_CHROM.matcher(context.getChr()).matches()) {
 								oppositeCount++;
 								int chrInt = Integer.parseInt(context.getChr());
 								chrOppositeCount[chrInt - 1]++;
@@ -182,13 +200,13 @@ public class SavvyVcfHomozygosity
 				} else {
 					Genotype g = context.getGenotype(sampleNames[sampleNo]);
 					GenotypeType type = g.getType();
-					Set<Integer> chrRef = ref.get(context.getChr());
+					Set<Integer> chrRef = ref.get(translatedChr);
 					if (chrRef != null) {
 						if (chrRef.contains(context.getStart())) {
 							if (GenotypeType.HET.equals(type)) {
 								good = true;
 								het = true;
-								if (CHROM.matcher(context.getChr()).matches()) {
+								if (NUM_CHROM.matcher(context.getChr()).matches()) {
 									oppositeCount++;
 									try {
 										int chrInt = Integer.parseInt(context.getChr());
@@ -199,7 +217,7 @@ public class SavvyVcfHomozygosity
 								//System.err.println(context.getChr() + "\t" + context.getStart() + "\t0");
 							} else if (GenotypeType.HOM_VAR.equals(type)) {
 								good = true;
-								if (CHROM.matcher(context.getChr()).matches()) {
+								if (NUM_CHROM.matcher(context.getChr()).matches()) {
 									sameCount++;
 									try {
 										int chrInt = Integer.parseInt(context.getChr());

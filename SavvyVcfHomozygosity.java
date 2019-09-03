@@ -39,8 +39,7 @@ public class SavvyVcfHomozygosity
 	 * @author Matthew Wakeling
 	 */
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
-		Map<String, Map<Integer, VariantArray>> ref = loadReference(args[0]);
-		HardyWeinbergLimit hardy = new HardyWeinbergLimit(ref.values().iterator().next().values().iterator().next().getSamples().length, 0.0001);
+		Map<String, Set<Integer>> ref = loadReference(args[0]);
 		String vcfFile = args[1];
 		TreeSet<String> sampleNameList = new TreeSet<String>();
 		boolean bases = false;
@@ -74,16 +73,16 @@ public class SavvyVcfHomozygosity
 					String[] names = new String[1];
 					names[0] = sampleNames[i];
 					System.out.print(names[0] + "\t");
-					doHomozygosity(file, names, true, false, true, ref, hardy);
+					doHomozygosity(file, names, true, false, true, ref);
 					System.out.println("");
 					names = new String[2];
 					names[0] = sampleNames[i];
 					for (int o = i + 1; o < sampleNames.length; o++) {
 						names[1] = sampleNames[o];
 						System.out.print(names[0] + " " + names[1] + "\t");
-						doHomozygosity(file, names, true, false, false, ref, hardy);
+						doHomozygosity(file, names, true, false, false, ref);
 						System.out.print("\t");
-						doHomozygosity(file, names, true, true, true, ref, hardy);
+						doHomozygosity(file, names, true, true, true, ref);
 						System.out.println("");
 					}
 				}
@@ -94,12 +93,12 @@ public class SavvyVcfHomozygosity
 			for (int i = 0; i < sampleNames.length; i++) {
 				sampleNames[i] = iter.next();
 			}
-			doHomozygosity(vcfFile, sampleNames, bases, parents, true, ref, hardy);
+			doHomozygosity(vcfFile, sampleNames, bases, parents, true, ref);
 			System.out.println("");
 		}
 	}
 
-	public static void doHomozygosity(String vcfFile, String[] sampleNames, boolean bases, boolean parents, boolean printVariantCounts, Map<String, Map<Integer, VariantArray>> ref, HardyWeinbergLimit hardy) {
+	public static void doHomozygosity(String vcfFile, String[] sampleNames, boolean bases, boolean parents, boolean printVariantCounts, Map<String, Set<Integer>> ref) {
 		int blockSize = (parents ? POT_BLOCK : BLOCK);
 		int maxHet = (parents ? POT_MAXHET : MAXHET);
 		VCFFileReader reader = new VCFFileReader(new File(vcfFile));
@@ -182,33 +181,26 @@ public class SavvyVcfHomozygosity
 				} else {
 					Genotype g = context.getGenotype(sampleNames[sampleNo]);
 					GenotypeType type = g.getType();
-					Map<Integer, VariantArray> chrRef = ref.get(context.getChr());
+					Set<Integer> chrRef = ref.get(context.getChr());
 					if (chrRef != null) {
-						VariantArray vArray = chrRef.get(context.getStart());
-						if (vArray != null) {
-							int[] counts = new int[3];
-							for (byte b : vArray.getSamples()) {
-								counts[b]++;
-							}
-							if (hardy.pass(counts[0], counts[1], counts[2])) {
-								if (GenotypeType.HET.equals(type)) {
-									good = true;
-									het = true;
-									if (Pattern.matches("^[0-9]*$", context.getChr())) {
-										oppositeCount++;
-										int chrInt = Integer.parseInt(context.getChr());
-										chrOppositeCount[chrInt - 1]++;
-									}
-									//System.err.println(context.getChr() + "\t" + context.getStart() + "\t0");
-								} else if (GenotypeType.HOM_VAR.equals(type)) {
-									good = true;
-									if (Pattern.matches("^[0-9]*$", context.getChr())) {
-										sameCount++;
-										int chrInt = Integer.parseInt(context.getChr());
-										chrSameCount[chrInt - 1]++;
-									}
-									//System.err.println(context.getChr() + "\t" + context.getStart() + "\t1");
+						if (chrRef.contains(context.getStart())) {
+							if (GenotypeType.HET.equals(type)) {
+								good = true;
+								het = true;
+								if (Pattern.matches("^[0-9]*$", context.getChr())) {
+									oppositeCount++;
+									int chrInt = Integer.parseInt(context.getChr());
+									chrOppositeCount[chrInt - 1]++;
 								}
+								//System.err.println(context.getChr() + "\t" + context.getStart() + "\t0");
+							} else if (GenotypeType.HOM_VAR.equals(type)) {
+								good = true;
+								if (Pattern.matches("^[0-9]*$", context.getChr())) {
+									sameCount++;
+									int chrInt = Integer.parseInt(context.getChr());
+									chrSameCount[chrInt - 1]++;
+								}
+								//System.err.println(context.getChr() + "\t" + context.getStart() + "\t1");
 							}
 						}
 					}
@@ -254,28 +246,36 @@ public class SavvyVcfHomozygosity
 		}*/
 	}
 
-	public static Map<String, Map<Integer, VariantArray>> loadReference(String fileName) throws IOException, ClassNotFoundException {
+	public static Map<String, Set<Integer>> loadReference(String fileName) throws IOException, ClassNotFoundException {
 		ObjectInputStream vcf = null;
 		try {
 			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(fileName))));
 		} catch (ZipException e) {
 			vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(fileName)));
 		}
-		HashMap<String, Map<Integer, VariantArray>> ref = new HashMap<String, Map<Integer, VariantArray>>();
+		HashMap<String, Set<Integer>> ref = new HashMap<String, Set<Integer>>();
 		boolean hasMoreVariants = true;
 		VariantArray vArray = null;
+		HardyWeinbergLimit hardy = null;
 		try {
 			vArray = (VariantArray) vcf.readObject();
+			hardy = new HardyWeinbergLimit(vArray.getSamples().length, 0.0001);
 		} catch (EOFException e) {
 			hasMoreVariants = false;
 		}
 		while (hasMoreVariants) {
-			Map<Integer, VariantArray> chrRef = ref.get(vArray.getChr());
-			if (chrRef == null) {
-				chrRef = new HashMap<Integer, VariantArray>();
-				ref.put(vArray.getChr(), chrRef);
+			int[] counts = new int[3];
+			for (byte b : vArray.getSamples()) {
+				counts[b]++;
 			}
-			chrRef.put(vArray.getPosition(), vArray);
+			if (hardy.pass(counts[0], counts[1], counts[2])) {
+				Set<Integer> chrRef = ref.get(vArray.getChr());
+				if (chrRef == null) {
+					chrRef = new HashSet<Integer>();
+					ref.put(vArray.getChr(), chrRef);
+				}
+				chrRef.add(vArray.getPosition());
+			}
 			try {
 				vArray = (VariantArray) vcf.readObject();
 			} catch (EOFException e) {

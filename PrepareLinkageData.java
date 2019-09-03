@@ -93,6 +93,7 @@ public class PrepareLinkageData
 			}
 		}
 		output.finish();
+		output.close();
 	}
 
 	public static class Output
@@ -133,6 +134,12 @@ public class PrepareLinkageData
 				System.err.println("Written " + count + " variants, now on " + context.getChr() + ":" + context.getPosition());
 			}
 			out.writeObject(context);
+			out.reset();
+		}
+
+		public void close() throws IOException {
+			out.flush();
+			out.close();
 		}
 	}
 }

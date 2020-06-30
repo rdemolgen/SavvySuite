@@ -61,6 +61,8 @@ In addition, the following arguments can be provided:
 + -sv (number) - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
 + -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed. The default is 20.
 + -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
++ -case - All samples listed after this option (until a -control option) are marked as case samples, and CNV calling will be performed on them. This is the default.
++ -control - All samples listed after this option (until a -case option) are marked as control samples, and CNV calling will not be performed on them.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome

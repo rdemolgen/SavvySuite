@@ -320,7 +320,7 @@ public class SelectControlSamples
 						}
 						if (sdistance == 0.0) {
 							// Sample is identical to the argument. Exclude it.
-							sampleDistances[0] += Double.POSITIVE_INFINITY;
+							sampleDistances[o] += Double.POSITIVE_INFINITY;
 						} else {
 							sampleDistances[o] += Math.sqrt(sdistance);
 						}

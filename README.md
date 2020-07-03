@@ -50,7 +50,7 @@ To perform the analysis, the following command should be used:
 ```
 java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.txt
 ```
-The <size> parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected. If you have a lot of samples and SavvyCNV takes a long time, then please use the SelectControlSamples software described below.
+The (size) parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected. If you have a lot of samples and SavvyCNV takes a long time, then please use the SelectControlSamples software described below.
 In addition, the following arguments can be provided:
 + -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
 + -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
@@ -94,7 +94,7 @@ The software should be run as follows:
 ```
 java -Xmx30g SelectControlSamples -d (size) *.coverageBinner >summary_file
 ```
-to create the summary file. The following additional options are available:
+to create the summary file. The (size) parameter is the size of the chunks that the genome is split into, in the same way as with SavvyCNV. The following additional options are available:
 + -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed. The default is 20.
 + -subset (number) - This sets the number of samples that the SVD will be performed on, with a default of 50. Set this according to how much time you want the software to take - 150 is not unreasonable. The software will take time proportional to this parameter to the power of 2.4, plus time proportional to the total number of samples on the command line.
 + -chr (chromosome name) - This limits the analysis to just one chromosome - all reads outside that chromosome will be discarded.

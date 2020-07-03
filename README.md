@@ -99,6 +99,7 @@ to create the summary file. The (size) parameter is the size of the chunks that 
 + -subset (number) - This sets the number of samples that the SVD will be performed on, with a default of 50. Set this according to how much time you want the software to take - 150 is not unreasonable. The software will take time proportional to this parameter to the power of 2.4, plus time proportional to the total number of samples on the command line.
 + -chr (chromosome name) - This limits the analysis to just one chromosome - all reads outside that chromosome will be discarded.
 + -cross - Instead of producing a summary file, the software will produce a full table of the difference metrics between all samples. The output file can be visualised in gnuplot by running "plot 'file' with image".
++ -svs - Instead of producing a summary file the software will print the singular vectors of all the samples. One row is printed for each sample, and the multiple values from the singular vector (as many as specified in the -subset option) are in multiple columns, ordered from the largest singular value downwards.
 
 To use the summary file and produce a list of best-matching samples, the software should be run as follows:
 ```
@@ -108,6 +109,7 @@ You should only specify a small number of samples (or preferably one) on this co
 + -subset (number) - This sets the number of samples that this software will print out.
 + -stats - Without this option, the output of this command is a list of CoverageBinner files that went into the summary file. With this option, a second column separated by a tab character is added to the output, which is the sum distance to the specified samples.
 + -cross - Instead of selecting matching samples, all other arguments are ignored, and the software will produce a full table of the difference metrics between all samples in the summary file.
++ -svs - Instead of selecting matching samples, all other arguments are ignored, and the software will print the singular vectors of all the samples in the summary file. One row is printed for each sample, and the multiple values from the singular vector (as many as specified in the -subset option) are in multiple columns, ordered from the largest singular value downwards.
 
 SavvyCnv can therefore be run on a sample by running:
 ```

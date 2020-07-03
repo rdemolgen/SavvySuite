@@ -111,7 +111,7 @@ You should only specify a small number of samples (or preferably one) on this co
 
 SavvyCnv can therefore be run on a sample by running:
 ```
-java -Xmx30g SavvyCNV -d (size) case_sample.csv -control `java -Xmx30g SelectControlSamples -summary summary_file` >cnv_list.csv 2>log_messages.txt
+java -Xmx30g SavvyCNV -d (size) case_sample.coverageBinner -control `java -Xmx30g SelectControlSamples -summary summary_file` >cnv_list.csv 2>log_messages.txt
 ```
 
 ### PrepareLinkageData

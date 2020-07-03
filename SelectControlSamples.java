@@ -37,6 +37,7 @@ public class SelectControlSamples
 		String summaryFile = null;
 		boolean cross = false;
 		boolean stats = false;
+		boolean svs = false;
 		for (int i = 0; i < args.length; i++) {
 			if ("-d".equals(args[i])) {
 				i++;
@@ -57,6 +58,8 @@ public class SelectControlSamples
 				cross = true;
 			} else if ("-stats".equals(args[i])) {
 				stats = true;
+			} else if ("-svs".equals(args[i])) {
+				svs = true;
 			} else {
 				samples.add(args[i]);
 			}
@@ -226,6 +229,15 @@ public class SelectControlSamples
 						System.out.println(i + "\t" + o + "\t" + Math.sqrt(sdistance));
 					}
 				}
+			} else if (svs) {
+				for (int i = 0; i < samples.size(); i++) {
+					double[] vector = calculateSampleVector(subsetCount, chunkChromosomes, chunkStarts, totalReadsArray, scale, sumArray, uInverse, samples.get(i), limitChromosome, divider);
+					System.out.print(i + "\t" + samples.get(i));
+					for (int svNo = 0; svNo < subsetCount; svNo++) {
+						System.out.print("\t" + vector[svNo]);
+					}
+					System.out.println("");
+				}
 			} else {
 				ObjectOutputStream out = new ObjectOutputStream(System.out);
 				out.writeInt(subsetCount);
@@ -280,6 +292,17 @@ public class SelectControlSamples
 						}
 						System.out.println(i + "\t" + o + "\t" + Math.sqrt(sdistance));
 					}
+				}
+			} else if (svs) {
+				if (!samples.isEmpty()) {
+					System.err.println("-svs was specified, ignoring samples specified in the command line");
+				}
+				for (int i = 0; i < summarySamples.size(); i++) {
+					System.out.print(i + "\t" + summarySamples.get(i));
+					for (int svNo = 0; svNo < subsetCount; svNo++) {
+						System.out.print("\t" + vectors[i][svNo]);
+					}
+					System.out.println("");
 				}
 			} else {
 				System.err.println("Processing " + samples.size() + " samples - finding " + subsetCount + " best matching samples out of pool of " + summarySamples.size());

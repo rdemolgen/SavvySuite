@@ -318,12 +318,17 @@ public class SelectControlSamples
 							double dist = vector[p] - vectors[o][p];
 							sdistance += dist * dist;
 						}
-						sampleDistances[o] += Math.sqrt(sdistance);
+						if (sdistance == 0.0) {
+							// Sample is identical to the argument. Exclude it.
+							sampleDistances[0] += Double.POSITIVE_INFINITY;
+						} else {
+							sampleDistances[o] += Math.sqrt(sdistance);
+						}
 					}
 				}
 				List<SortedSample> sortedSamples = new ArrayList<SortedSample>();
 				for (int o = 0; o < summarySamples.size(); o++) {
-					if (!samples.contains(summarySamples.get(o))) {
+					if ((!samples.contains(summarySamples.get(o))) && (sampleDistances[o] < Double.POSITIVE_INFINITY)) {
 						sortedSamples.add(new SortedSample(summarySamples.get(o), sampleDistances[o]));
 					}
 				}

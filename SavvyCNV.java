@@ -587,13 +587,15 @@ public class SavvyCNV
 					stddev = 1.0 / Math.sqrt(dEArray[o]);
 				}
 				double val = dArray[o];
+				double newDelProb = logProbDel(val, stddev, minProb, mosaic);
+				double newDupProb = logProbDup(val, stddev, minProb, mosaic);
 				if (dPosVariance[o] < 20.0) {
 					if (graph) {
 						depthFile.println(chr + "\t" + (o * divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
 						depthFile.println(chr + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
 					}
 					if (dataFile != null) {
-						dataFile.println(chr + "\t" + (o * divider) + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
+						dataFile.println(chr + "\t" + (o * divider) + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o] + "\t" + newDelProb + "\t" + newDupProb);
 					}
 					needBlankLine = true;
 				} else if (needBlankLine) {
@@ -607,9 +609,7 @@ public class SavvyCNV
 				}
 				if (dPosVariance[o] < cutoffV * cutoffV) {
 				//{
-					double newDelProb = logProbDel(val, stddev, minProb, mosaic);
 					double newNorProb = 0.0;
-					double newDupProb = logProbDup(val, stddev, minProb, mosaic);
 					//if (dPosVariance[o] >= cutoffV * cutoffV) {
 					//	// Decay the CNV probability in the data-free gaps.
 					//	newDelProb = -3;

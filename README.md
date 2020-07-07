@@ -64,6 +64,15 @@ In addition, the following arguments can be provided:
 + -chr (chromosome name) - This limits the analysis to just one chromosome - all reads outside that chromosome will be discarded.
 + -case - All samples listed after this option (until a -control option) are marked as case samples, and CNV calling will be performed on them. This is the default.
 + -control - All samples listed after this option (until a -case option) are marked as control samples, and CNV calling will not be performed on them.
++ -data - An additional file will be created for all case samples, which contains the raw data that SavvyCNV used to call CNVs. The output file is named after the input CoverageBinner file, with ".<bin_size>.data" appended. The file contains 8 columns, which are:
+  1. Chromosome
+  2. Bin start position
+  3. Bin end position
+  4. Noise-corrected normalised read depth
+  5. Estimated error in normalised read depth
+  6. Uncorrected normalised read depth
+  7. Phred score probability of a deletion in this bin
+  8. Phred score probability of a duplication in this bin
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome
@@ -75,7 +84,7 @@ The output cnv_list.csv contains a tab-separated list of detected CNVs. The colu
 7. The phred score of the CNV
 8. The phred score divided by the width of the CNV in chunks. Most valid CNVs have a value more than ten in this column
 9. The relative dosage in the CNV, so 0.5 for a heterozygous deletion etc.
-10. The filename containing the sample summary.
+10. The filename of the input CoverageBinner file for this sample
 
 The log_messages.txt file contains log messages, and also a summary of each sample. Each sample has a line containing the following columns:
 1. Noisyness of the sample before excluding known CNVs

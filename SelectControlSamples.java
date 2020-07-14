@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -333,13 +334,21 @@ public class SelectControlSamples
 					}
 				}
 				Collections.sort(sortedSamples);
-				for (int o = 0; o < Math.min(subsetCount, sortedSamples.size()); o++) {
+				int o = 0;
+				int emitted = 0;
+				while ((emitted < subsetCount) && (o < sortedSamples.size())) {
 					SortedSample s = sortedSamples.get(o);
-					if (stats) {
-						System.out.println(s.getName() + "\t" + s.getDistance());
+					if ((new File(s.getName())).canRead()) {
+						if (stats) {
+							System.out.println(s.getName() + "\t" + s.getDistance());
+						} else {
+							System.out.println(s.getName());
+						}
+						emitted++;
 					} else {
-						System.out.println(s.getName());
+						System.err.println("File " + s.getName() + " (score " + s.getDistance() + ") has gone missing");
 					}
+					o++;
 				}
 			}
 		}

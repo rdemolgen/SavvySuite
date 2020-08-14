@@ -532,35 +532,18 @@ public class SavvyCNV
 
 	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance, double[][] aArray, int errorType, double[][] eArray, PrintWriter dataFile) {
 		boolean needBlankLine = false;
+		double[] dArray = new double[aPrimeArray.length];
+		double[] beforeArray = new double[aArray.length];
+		double[] dEArray = new double[eArray.length];
+		for (int i = 0; i < aPrimeArray.length; i++) {
+			dArray[i] = Math.exp(aPrimeArray[i][sampleNo]) - 0.01;
+			beforeArray[i] = Math.exp(aArray[i][sampleNo]) - 0.01;
+			dEArray[i] = eArray[i][sampleNo];
+		}
 		List<State> retval = new ArrayList<State>();
 		for (String chr : arraysMap.keySet()) {
-			if (graph && needBlankLine) {
-				depthFile.println("");
-				needBlankLine = false;
-			}
-			long[] array = arraysMap.get(chr)[sampleNo];
-			double[] dArray = new double[array.length];
-			double[] beforeArray = new double[array.length];
-			double[] dEArray = new double[array.length];
-			double[] dPosVariance = new double[array.length];
-			for (int o = 0; o < dPosVariance.length; o++) {
-				dPosVariance[o] = Double.MAX_VALUE;
-			}
-			int maxPos = 0;
-			for (int o = 0; o < chunkChromosomes.size(); o++) {
-				String chunkChr = chunkChromosomes.get(o);
-				if (chr.equals(chunkChr)) {
-					int start = chunkStarts.get(o);
-					if (dArray.length > start) {
-						dArray[start] = Math.exp(aPrimeArray[o][sampleNo]) - 0.01;
-						beforeArray[start] = Math.exp(aArray[o][sampleNo]) - 0.01;
-						dEArray[start] = eArray[o][sampleNo];
-						dPosVariance[start] = posVariance[o];
-					}
-					maxPos = Math.max(maxPos, start);
-				}
-			}
-			// dArray[o] contains the normalised corrected read depth for position o (divided by divider) for this chromosome.
+			long time1 = System.currentTimeMillis();
+			// dArray[o] contains the normalised corrected read depth for position chunkStarts.get(o) (divided by divider) for this chromosome.
 			// Now do the Viterbi algorithm on each sample for this chromosome.
 			// We need to hold onto three separate paths, corresponding to deletion, normal, and duplication.
 			// The three paths have a common start of null, leading up to a last state.
@@ -576,103 +559,97 @@ public class SavvyCNV
 			double delProb = logTransProb;
 			double norProb = 0.0;
 			double dupProb = logTransProb;
-			int blocksSinceLast = 1;
-			for (int o = 0; o < dArray.length; o++) {
-				double stddev = Math.sqrt(dPosVariance[o] * sampleVariance / totalPosVariance);
-				if (errorType == 1) {
-					// Additive error model
-					stddev = Math.sqrt(dPosVariance[o] + sampleVariance);
-				} else if (errorType == 2) {
-					// Poisson error model
-					stddev = 1.0 / Math.sqrt(dEArray[o]);
-				}
-				double val = dArray[o];
-				double newDelProb = logProbDel(val, stddev, minProb, mosaic);
-				double newDupProb = logProbDup(val, stddev, minProb, mosaic);
-				if (dPosVariance[o] < 20.0) {
+			int lastStart = -1000;
+			for (int o = 0; o < chunkChromosomes.size(); o++) {
+				if (chr.equals(chunkChromosomes.get(o))) {
+					int start = chunkStarts.get(o);
+					if ((start > lastStart + 1) && needBlankLine) {
+						if (graph) {
+							depthFile.println("");
+						}
+						if (dataFile != null) {
+							dataFile.println("");
+						}
+						needBlankLine = false;
+					}
+					double stddev = Math.sqrt(posVariance[o] * sampleVariance / totalPosVariance);
+					if (errorType == 1) {
+						// Additive error model
+						stddev = Math.sqrt(posVariance[o] + sampleVariance);
+					} else if (errorType == 2) {
+						// Poisson error model
+						stddev = 1.0 / Math.sqrt(dEArray[o]);
+					}
+					double val = dArray[o];
+					double newDelProb = logProbDel(val, stddev, minProb, mosaic);
+					double newDupProb = logProbDup(val, stddev, minProb, mosaic);
 					if (graph) {
-						depthFile.println(chr + "\t" + (o * divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
-						depthFile.println(chr + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
+						depthFile.println(chr + "\t" + (start * divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
+						depthFile.println(chr + "\t" + (start * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
 					}
 					if (dataFile != null) {
-						dataFile.println(chr + "\t" + (o * divider) + "\t" + (o * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o] + "\t" + newDelProb + "\t" + newDupProb);
+						dataFile.println(chr + "\t" + (start * divider) + "\t" + (start * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o] + "\t" + newDelProb + "\t" + newDupProb);
 					}
 					needBlankLine = true;
-				} else if (needBlankLine) {
-					if (graph) {
-						depthFile.println("");
+					if (posVariance[o] < cutoffV * cutoffV) {
+						double newNorProb = 0.0;
+						double fromDel = delProb + newDelProb;
+						double fromNor = norProb + logTransProb + newDelProb;
+						double fromDup = dupProb + logTransProb + newDelProb;
+						double nextDelProb;
+						State nextDelState;
+						if ((fromDel > fromNor) && (fromDel > fromDup)) {
+							// The new delState should be taken from the old delState.
+							nextDelState = new State(chr, start * divider, start * divider + divider, 1, delState, newDelProb - newNorProb, val);
+							nextDelProb = fromDel;
+						} else if (fromNor > fromDup) {
+							nextDelState = new State(chr, start * divider, start * divider + divider, 1, norState, newDelProb - newNorProb, val);
+							nextDelProb = fromNor;
+						} else {
+							nextDelState = new State(chr, start * divider, start * divider + divider, 1, dupState, newDelProb - newNorProb, val);
+							nextDelProb = fromDup;
+						}
+						fromDel = delProb + logTransProb + newNorProb;
+						fromNor = norProb + newNorProb;
+						fromDup = dupProb + logTransProb + newNorProb;
+						double nextNorProb;
+						State nextNorState;
+						if ((fromDel > fromNor) && (fromDel > fromDup)) {
+							// The new norState should be taken from the old delState.
+							nextNorState = new State(chr, start * divider, start * divider + divider, 2, delState, 0.0, val);
+							nextNorProb = fromDel;
+						} else if (fromNor > fromDup) {
+							nextNorState = new State(chr, start * divider, start * divider + divider, 2, norState, 0.0, val);
+							nextNorProb = fromNor;
+						} else {
+							nextNorState = new State(chr, start * divider, start * divider + divider, 2, dupState, 0.0, val);
+							nextNorProb = fromDup;
+						}
+						fromDel = delProb + logTransProb + newDupProb;
+						fromNor = norProb + logTransProb + newDupProb;
+						fromDup = dupProb + newDupProb;
+						double nextDupProb;
+						State nextDupState;
+						if ((fromDel > fromNor) && (fromDel > fromDup)) {
+							// The new dupState should be taken from the old delState.
+							nextDupState = new State(chr, start * divider, start * divider + divider, 3, delState, newDupProb - newNorProb, val);
+							nextDupProb = fromDel;
+						} else if (fromNor > fromDup) {
+							nextDupState = new State(chr, start * divider, start * divider + divider, 3, norState, newDupProb - newNorProb, val);
+							nextDupProb = fromNor;
+						} else {
+							nextDupState = new State(chr, start * divider, start * divider + divider, 3, dupState, newDupProb - newNorProb, val);
+							nextDupProb = fromDup;
+						}
+						delState = nextDelState;
+						delProb = nextDelProb;
+						norState = nextNorState;
+						norProb = nextNorProb;
+						dupState = nextDupState;
+						dupProb = nextDupProb;
 					}
-					if (dataFile != null) {
-						dataFile.println("");
-					}
-					needBlankLine = false;
+					lastStart = start;
 				}
-				if (dPosVariance[o] < cutoffV * cutoffV) {
-				//{
-					double newNorProb = 0.0;
-					//if (dPosVariance[o] >= cutoffV * cutoffV) {
-					//	// Decay the CNV probability in the data-free gaps.
-					//	newDelProb = -3;
-					//	newDupProb = -3;
-					//}
-					//System.err.println("New probabilities\t" + val + "\t" + stddev + "\t" + newDelProb + "\t" + newNorProb + "\t" + newDupProb);
-					double fromDel = delProb + newDelProb;
-					double fromNor = norProb + logTransProb + newDelProb;
-					double fromDup = dupProb + logTransProb + newDelProb;
-					double nextDelProb;
-					State nextDelState;
-					if ((fromDel > fromNor) && (fromDel > fromDup)) {
-						// The new delState should be taken from the old delState.
-						nextDelState = new State(chr, o * divider, o * divider + divider, 1, delState, newDelProb - newNorProb, val);
-						nextDelProb = fromDel;
-					} else if (fromNor > fromDup) {
-						nextDelState = new State(chr, o * divider, o * divider + divider, 1, norState, newDelProb - newNorProb, val);
-						nextDelProb = fromNor;
-					} else {
-						nextDelState = new State(chr, o * divider, o * divider + divider, 1, dupState, newDelProb - newNorProb, val);
-						nextDelProb = fromDup;
-					}
-					fromDel = delProb + logTransProb + newNorProb;
-					fromNor = norProb + newNorProb;
-					fromDup = dupProb + logTransProb + newNorProb;
-					double nextNorProb;
-					State nextNorState;
-					if ((fromDel > fromNor) && (fromDel > fromDup)) {
-						// The new norState should be taken from the old delState.
-						nextNorState = new State(chr, o * divider, o * divider + divider, 2, delState, 0.0, val);
-						nextNorProb = fromDel;
-					} else if (fromNor > fromDup) {
-						nextNorState = new State(chr, o * divider, o * divider + divider, 2, norState, 0.0, val);
-						nextNorProb = fromNor;
-					} else {
-						nextNorState = new State(chr, o * divider, o * divider + divider, 2, dupState, 0.0, val);
-						nextNorProb = fromDup;
-					}
-					fromDel = delProb + logTransProb + newDupProb;
-					fromNor = norProb + logTransProb + newDupProb;
-					fromDup = dupProb + newDupProb;
-					double nextDupProb;
-					State nextDupState;
-					if ((fromDel > fromNor) && (fromDel > fromDup)) {
-						// The new dupState should be taken from the old delState.
-						nextDupState = new State(chr, o * divider, o * divider + divider, 3, delState, newDupProb - newNorProb, val);
-						nextDupProb = fromDel;
-					} else if (fromNor > fromDup) {
-						nextDupState = new State(chr, o * divider, o * divider + divider, 3, norState, newDupProb - newNorProb, val);
-						nextDupProb = fromNor;
-					} else {
-						nextDupState = new State(chr, o * divider, o * divider + divider, 3, dupState, newDupProb - newNorProb, val);
-						nextDupProb = fromDup;
-					}
-					delState = nextDelState;
-					delProb = nextDelProb;
-					norState = nextNorState;
-					norProb = nextNorProb;
-					dupState = nextDupState;
-					dupProb = nextDupProb;
-					blocksSinceLast = 0;
-				}
-				blocksSinceLast++;
 			}
 			delProb = delProb + logTransProb;
 			dupProb = dupProb + logTransProb;

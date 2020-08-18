@@ -125,6 +125,33 @@ SavvyCnv can therefore be run on a sample by running:
 java -Xmx30g SavvyCNV -d (size) case_sample.coverageBinner -control `java -Xmx30g SelectControlSamples -summary summary_file` >cnv_list.csv 2>log_messages.txt
 ```
 
+### SavvyCNVJointCaller
+This software performs joint calling of CNVs in multiple samples. It is not suited to calling CNVs in large numbers of samples, but is intended to be used with multiple members of the same family. The algorithm favours CNVs starting and ending in the same location in multiple samples. This should reduce the incidence of (for example) false positive de novo CNVs being detected when CNVs are called independently in two parents and a child, if the CNV detected in the child is falsely detected as slightly larger than the CNV inherited from a parent.
+
+This software uses the output from SavvyCNV when it is given the "-data" option. SavvyCNV creates these files named after the input CoverageBinner files, with ".<bin_size>.data" appended.
+
+To perform the analysis, the following command should be used:
+```
+java -Xmx30g SavvyCNVJointCaller *.coverageBinner.<bin_size>.data >cnv_list.csv 2>log_messages.txt
+```
+Extra options are:
++ -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
++ -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
++ -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
++ -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
+
+The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
+1. Chromosome
+2. CNV start position
+3. CNV end position
+4. Deletion/duplication/normal
+5. Number of genome chunks used as evidence for the CNV
+6. The phred score for a deletion for this sample (positive means a deletion is likely, negative means it is unlikely)
+7. The phred score for a duplication for this sample
+8. The phred score divided by the width of the CNV in chunks. Most valid CNVs have a value more than ten in this column
+9. The relative dosage for this sample in this region, so 0.5 for a heterozygous deletion etc.
+10. The filename of the input data file for this sample
+
 ### PrepareLinkageData
 This software is used to pre-process linkage disequilibrium data, to get it into a format that can be read quickly by SavvyHomozygosity and SavvySharedHaplotypes. It requires a vcf file containing whole genome genotype data for many samples (a few hundred would be appropriate). It can be run as follows:
 ```

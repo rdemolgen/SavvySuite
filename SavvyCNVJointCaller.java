@@ -20,15 +20,11 @@ public class SavvyCNVJointCaller
 	public static void main(String[] args) throws Exception
 	{
 		List<String> samples = new ArrayList<String>();
-		double cutoff = 0.25;
 		double transitionProb = 0.00001;
 		double minProb = 0.00000000001;
 		boolean mosaic = false;
 		for (int i = 0; i < args.length; i++) {
-			if ("-cutoff".equals(args[i])) {
-				i++;
-				cutoff = Double.parseDouble(args[i]);
-			} else if ("-trans".equals(args[i])) {
+			if ("-trans".equals(args[i])) {
 				i++;
 				transitionProb = Double.parseDouble(args[i]);
 			} else if ("-minProb".equals(args[i])) {
@@ -44,14 +40,13 @@ public class SavvyCNVJointCaller
 		double logTransProb = SavvyCNV.log(transitionProb);
 		//System.err.println("Transition probability " + logTransProb);
 		System.err.println("Processing " + samples.size() + " samples");
-		System.err.println("Using noise cutoff of " + cutoff);
 		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
 
 		TreeSet<Interval<Map<String, ReadDepth>>> data = new TreeSet<Interval<Map<String, ReadDepth>>>();
 		for (String sample : samples) {
 			loadData(data, sample);
 		}
-		viterbi(data, samples, logTransProb, minProb, cutoff, mosaic);
+		viterbi(data, samples, logTransProb, minProb, mosaic);
 	}
 
 	public static void loadData(TreeSet<Interval<Map<String, ReadDepth>>> data, String sample) throws IOException {
@@ -59,7 +54,7 @@ public class SavvyCNVJointCaller
 		String line = in.readLine();
 		while (line != null) {
 			String[] split = TAB.split(line);
-			if (split.length >= 6) {
+			if (split.length >= 5) {
 				String chr = split[0];
 				int start = Integer.parseInt(split[1]);
 				int end = Integer.parseInt(split[2]);
@@ -82,7 +77,7 @@ public class SavvyCNVJointCaller
 		}
 	}
 
-	public static void viterbi(TreeSet<Interval<Map<String, ReadDepth>>> data, List<String> samples, double logTransProb, double minProb, double cutoff, boolean mosaic) {
+	public static void viterbi(TreeSet<Interval<Map<String, ReadDepth>>> data, List<String> samples, double logTransProb, double minProb, boolean mosaic) {
 		// We are doing a viterbi algorithm, deciding between 3^samples states, corresponding to all possible combinations of
 		// each sample being loss, normal, or gain. Each transition has the same penalty, regardless of how many samples it changes
 		// the status of.
@@ -92,7 +87,6 @@ public class SavvyCNVJointCaller
 		for (int i = 0; i < sampleCount; i++) {
 			stateCount = stateCount * 3;
 		}
-		System.err.println(sampleCount + " samples means " + stateCount + " states");
 		State[] states = new State[stateCount];
 		double[] probabilities = new double[stateCount];
 		String lastChromosome = null;
@@ -129,52 +123,50 @@ public class SavvyCNVJointCaller
 			}
 			meanStddev = meanStddev / validCount;
 			//System.out.print("\t" + meanStddev);
-			if (meanStddev < cutoff) {
-				double[] delProb = new double[sampleCount];
-				double[] dupProb = new double[sampleCount];
-				double[] newVal = new double[sampleCount];
-				for (int i = 0; i < sampleCount; i++) {
-					if (depths[i] != null) {
-						delProb[i] = SavvyCNV.logProbDel(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
-						dupProb[i] = SavvyCNV.logProbDup(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
-						newVal[i] = depths[i].getVal();
-			//			System.out.print("\t" + delProb[i] + "\t" + dupProb[i]);
-					} else {
-						delProb[i] = 0.0;
-						dupProb[i] = 0.0;
-						newVal[i] = 1.0;
-			//			System.out.print("\t-\t-");
-					}
+			double[] delProb = new double[sampleCount];
+			double[] dupProb = new double[sampleCount];
+			double[] newVal = new double[sampleCount];
+			for (int i = 0; i < sampleCount; i++) {
+				if (depths[i] != null) {
+					delProb[i] = SavvyCNV.logProbDel(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
+					dupProb[i] = SavvyCNV.logProbDup(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
+					newVal[i] = depths[i].getVal();
+		//			System.out.print("\t" + delProb[i] + "\t" + dupProb[i]);
+				} else {
+					delProb[i] = 0.0;
+					dupProb[i] = 0.0;
+					newVal[i] = 1.0;
+		//			System.out.print("\t-\t-");
 				}
-				double[] probabilityChanges = new double[stateCount];
-				for (int i = 0; i < stateCount; i++) {
-					int[] decodedState = decodeState(i, sampleCount);
-					for (int sample = 0; sample < sampleCount; sample++) {
-						probabilityChanges[i] += decodedState[sample] == 0 ? 0.0 : (decodedState[sample] == 1 ? delProb[sample] : dupProb[sample]);
-					}
-			//		System.out.print("\t" + probabilityChanges[i]);
-				}
-				State[] nextStates = new State[stateCount];
-				double[] nextProbabilities = new double[stateCount];
-				for (int i = 0; i < stateCount; i++) {
-					double bestProb = -Double.MAX_VALUE;
-					int bestFromState = -1;
-					for (int fromState = 0; fromState < stateCount; fromState++) {
-						double prob = probabilities[fromState] + probabilityChanges[i];
-						if (i != fromState) {
-							prob += logTransProb;
-						}
-						if (prob > bestProb) {
-							bestProb = prob;
-							bestFromState = fromState;
-						}
-					}
-					nextStates[i] = new State(chr, start, end, i, states[bestFromState], delProb, dupProb, newVal);
-					nextProbabilities[i] = bestProb;
-				}
-				states = nextStates;
-				probabilities = nextProbabilities;
 			}
+			double[] probabilityChanges = new double[stateCount];
+			for (int i = 0; i < stateCount; i++) {
+				int[] decodedState = decodeState(i, sampleCount);
+				for (int sample = 0; sample < sampleCount; sample++) {
+					probabilityChanges[i] += decodedState[sample] == 0 ? 0.0 : (decodedState[sample] == 1 ? delProb[sample] : dupProb[sample]);
+				}
+		//		System.out.print("\t" + probabilityChanges[i]);
+			}
+			State[] nextStates = new State[stateCount];
+			double[] nextProbabilities = new double[stateCount];
+			for (int i = 0; i < stateCount; i++) {
+				double bestProb = -Double.MAX_VALUE;
+				int bestFromState = -1;
+				for (int fromState = 0; fromState < stateCount; fromState++) {
+					double prob = probabilities[fromState] + probabilityChanges[i];
+					if (i != fromState) {
+						prob += logTransProb;
+					}
+					if (prob > bestProb) {
+						bestProb = prob;
+						bestFromState = fromState;
+					}
+				}
+				nextStates[i] = new State(chr, start, end, i, states[bestFromState], delProb, dupProb, newVal);
+				nextProbabilities[i] = bestProb;
+			}
+			states = nextStates;
+			probabilities = nextProbabilities;
 			//System.out.println("");
 			lastChromosome = chr;
 		}

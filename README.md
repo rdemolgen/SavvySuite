@@ -53,7 +53,7 @@ java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.tx
 The (size) parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected. If you have a lot of samples and SavvyCNV takes a long time, then please use the SelectControlSamples software described below.
 In addition, the following arguments can be provided:
 + -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
-+ -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
++ -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from the calculation of how noisy a sample is. The default of 0.25 is probably best in most situations.
 + -g - Switches on the generation of graphs for all samples that have a detected CNV. The generated graphs will be placed in the same directory as the *.coverageBinner file.
 + -a - The same as ```-g```, but produces a graph for every sample.
 + -cytoBands (file) - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.
@@ -136,7 +136,6 @@ java -Xmx30g SavvyCNVJointCaller *.coverageBinner.<bin_size>.data >cnv_list.csv 
 ```
 Extra options are:
 + -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
-+ -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from analysis. The default of 0.25 is probably best in most situations.
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
 + -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
 

@@ -116,7 +116,7 @@ public class SavvyCNV
 		System.err.println("Processing " + samples.size() + " samples");
 		System.err.println("Using divider of " + divider);
 		System.err.println("Using noise cutoff of " + cutoff);
-		System.err.println("Using transition probability of " + transitionProb);
+		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
 		System.err.println("Blanking " + svsBlanked + " singular vectors");
 		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
 		if (errorType != 0) {

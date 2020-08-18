@@ -51,7 +51,6 @@ public class SavvyCNVJointCaller
 		for (String sample : samples) {
 			loadData(data, sample);
 		}
-		System.out.println("data.size() = " + data.size());
 		viterbi(data, samples, logTransProb, minProb, cutoff, mosaic);
 	}
 

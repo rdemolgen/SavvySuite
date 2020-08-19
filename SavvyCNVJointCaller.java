@@ -201,7 +201,7 @@ public class SavvyCNVJointCaller
 			if (state.getState() != 0) {
 				int[] decodedState = decodeState(state.getState(), sampleCount);
 				for (int sample = 0; sample < sampleCount; sample++) {
-					System.out.println(chr + "\t" + state.getStart() + "\t" + state.getEnd() + "\t" + (decodedState[sample] == 0 ? "Normal" : (decodedState[sample] == 1 ? "Deletion" : "Duplication")) + "\t" + state.getCount() + "\t" + state.getDelProb()[sample] + "\t" + state.getDupProb()[sample] + "\t" + (decodedState[sample] == 0 ? "-" : (decodedState[sample] == 1 ? "" + state.getDelProb()[sample] / state.getCount() : state.getDupProb()[sample] / state.getCount())) + "\t" + state.getProportion()[sample] + "\t" + samples.get(sample));
+					System.out.println(chr + "\t" + state.getStart() + "\t" + state.getEnd() + "\t" + (decodedState[sample] == 0 ? "Normal" : (decodedState[sample] == 1 ? "Deletion" : "Duplication")) + "\t" + state.getCount()[sample] + "\t" + state.getDelProb()[sample] + "\t" + state.getDupProb()[sample] + "\t" + (decodedState[sample] == 0 ? "-" : (decodedState[sample] == 1 ? "" + state.getDelProb()[sample] / state.getCount()[sample] : state.getDupProb()[sample] / state.getCount()[sample])) + "\t" + state.getProportion()[sample] + "\t" + samples.get(sample));
 				}
 			}
 		}
@@ -220,7 +220,8 @@ public class SavvyCNVJointCaller
 	{
 		private State previous;
 		private String chr;
-		private int start, end, state, count;
+		private int start, end, state;
+		private int[] count;
 		private double[] delProb, dupProb, proportion;
 
 		public State(String chr, int start, int end, int state, State previous, double[] delProb, double[] dupProb, double[] proportion) {
@@ -232,20 +233,28 @@ public class SavvyCNVJointCaller
 				double[] newDelProb = new double[delProb.length];
 				double[] newDupProb = new double[delProb.length];
 				double[] newProportion = new double[delProb.length];
+				this.count = new int[delProb.length];
 				for (int i = 0; i < delProb.length; i++) {
-					newDelProb[i] = delProb[i] + previous.delProb[i];
-					newDupProb[i] = dupProb[i] + previous.dupProb[i];
-					newProportion[i] = proportion[i] + previous.proportion[i];
+					if ((delProb[i] != 0.0) || (dupProb[i] != 0.0)) {
+						newDelProb[i] = delProb[i] + previous.delProb[i];
+						newDupProb[i] = dupProb[i] + previous.dupProb[i];
+						newProportion[i] = proportion[i] + previous.proportion[i];
+						this.count[i] = previous.count[i] + 1;
+					} else {
+						this.count[i] = previous.count[i];
+					}
 				}
 				this.delProb = newDelProb;
 				this.dupProb = newDupProb;
 				this.proportion = newProportion;
-				this.count = previous.count + 1;
 				this.previous = previous.previous;
 			} else {
 				this.start = start;
 				this.previous = previous;
-				this.count = 1;
+				this.count = new int[delProb.length];
+				for (int i = 0; i < count.length; i++) {
+					count[i] = 1;
+				}
 				this.delProb = delProb;
 				this.dupProb = dupProb;
 				this.proportion = proportion;
@@ -283,12 +292,12 @@ public class SavvyCNVJointCaller
 		public double[] getProportion() {
 			double[] retval = new double[proportion.length];
 			for (int i = 0; i < proportion.length; i++) {
-				retval[i] = proportion[i] / count;
+				retval[i] = proportion[i] / count[i];
 			}
 			return retval;
 		}
 
-		public int getCount() {
+		public int[] getCount() {
 			return count;
 		}
 

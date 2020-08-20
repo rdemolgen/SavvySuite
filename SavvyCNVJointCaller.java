@@ -241,6 +241,9 @@ public class SavvyCNVJointCaller
 						newProportion[i] = proportion[i] + previous.proportion[i];
 						this.count[i] = previous.count[i] + 1;
 					} else {
+						newDelProb[i] = previous.delProb[i];
+						newDupProb[i] = previous.dupProb[i];
+						newProportion[i] = previous.proportion[i];
 						this.count[i] = previous.count[i];
 					}
 				}
@@ -252,12 +255,18 @@ public class SavvyCNVJointCaller
 				this.start = start;
 				this.previous = previous;
 				this.count = new int[delProb.length];
+				this.proportion = new double[delProb.length];
 				for (int i = 0; i < count.length; i++) {
-					count[i] = 1;
+					if ((delProb[i] != 0.0) || (dupProb[i] != 0.0)) {
+						this.count[i] = 1;
+						this.proportion[i] = proportion[i];
+					} else {
+						this.count[i] = 0;
+						this.proportion[i] = 0.0;
+					}
 				}
 				this.delProb = delProb;
 				this.dupProb = dupProb;
-				this.proportion = proportion;
 			}
 		}
 

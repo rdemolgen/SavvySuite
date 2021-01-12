@@ -55,7 +55,7 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 		Map<String, List<Cnv>> cnvs = new HashMap<String, List<Cnv>>();
 		BufferedReader in = new BufferedReader(new FileReader(args[argNo++]));
 		String line = in.readLine();
-		System.out.println(line + "\tVariants\t25%\t33%\t50%");
+		System.out.println(line + "\tSample\tVariants\tHeterozygous\tReads\t25%\t33%\t50%\tHetProportion\tPeakPosition\tPeakHeight");
 		line = in.readLine();
 		while (line != null) {
 			try {

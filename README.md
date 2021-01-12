@@ -213,6 +213,7 @@ The output contains multiple rows, one for each match between a cnv_list line an
 9. PeakPosition - the allele ratio with the highest signal strength. This is the best estimate of the allele ratio of variants in the area of the alleged CNV.
 10. PeakHeight - the highest signal strength value.
 A region may or may not have sufficient data to evaluate a CNV. This is the purpose of the Variants, Heterozygous, and Reads columns. A region with sufficient data should have at least several heterozygous variants, and ideally at least 1000 reads.
+
 The data can show the following kinds of results:
 1. Homozygous area or a deletion (or a normal region on the X/Y chromosome in males). This is indicated by the HetProportion column having a very low value. It is not possible to distinguish between a homozygous region and a deleted (monosomy) region.
 2. Normal (disomy) region (or duplication on the X/Y chromosome in males). This is indicated by the HetProportion value being around 0.6 (could vary from 0.3 to 0.8), the 50% value being higher than the 33% or 25% value, and the PeakPosition value being close to 0.5.

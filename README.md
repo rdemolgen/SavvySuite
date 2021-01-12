@@ -179,3 +179,43 @@ java -Xmx5g SavvyVcfHomozygosity linkage_data input.vcf (options) (samplenames) 
 If a single samplename is used with no options, then the output will be a BED file containing homozygous regions for the sample. If multiple samplenames are used, then only regions that are homozygous in all samples are output. Adding the "-p" option alters this behaviour, so that regions where all the named samples share a haplotype are output.
 
 The linkage_data file is used to filter the variants in the VCF file to only allow variants that are close to a Hardy-Weinberg equilibrium, to reduce the number of false heterozygous variants in homozygous regions. The variants are then analysed using a multi-resolution hidden markov model to find regions of at least 16 variants where the proportion of heterozygous variants is no more than 10%.
+
+### ValidateGenomeCnvsUsingAlleleBalance
+This software analyses a VCF file, and determines whether the read balance of the variants present agrees with a list of CNVs provided to it. For example, you should expect to not find any heterozygous variants inside a deletion, and you should expect to see a 1:2 read balance for variants inside a duplication. It can be run as follows:
+```
+java -Xmx5g ValidateGenomeCnvsUsingAlleleBalance [-columns chr start end sample] cnv_list linkage_data vcf_files...
+```
+The options are:
++ -columns is an optional argument. By default, the software will read the cnv_list file, and take the chromosome, start, end, and sample name from columns 1, 2, 3, and 4. The -columns option allows these values to be taken from a different column instead.
++ The cnv_list file is a text file containing tab-separated values. The software needs at least the chromosome, start, end, and sample name for each CNV that is to be validated. If a sample name is "all" in the list, then the likelihood of that CNV existing is tested in all the samples in all the provided VCF files. The file should have a one-line header.
++ The linkage_data file is used to filter the variants in the VCF file to only allow common variants that have a good allele balance in most samples. The keyword "none" can be used instead, and the software will use all available variants without filtering.
++ The list of vcf files will be iterated through to find data for all the samples.
+So for instance, if the cnv_list file contains the following (with tabs separating columns):
+```
+chr start end sample
+6 144200000 144400000 all
+```
+then you can run:
+```
+java -Xmx5g ValidateGenomeCnvsUsingAlleleBalance cnv_list none vcf_files...
+```
+and it will evaluate the likelihood of a 6q24 CNV existing in all the samples found in all the VCF files, from the allele balance of the variants.
+
+The output contains multiple rows, one for each match between a cnv_list line and a sample in a VCF file. Each line starts with a copy of the line from the cnv_list, followed by these extra columns:
+1. Sample - the sample name that the data is taken from. This will usually be the same as the data from the cnv_list earlier in the line, but it is useful when the cnv_list specifies "all" samples.
+2. Variants - the total number of variants found in the area of the alleged CNV.
+3. Heterozygous - the number of heterozygous variants found in the area of the alleged CNV.
+4. Reads - the total number of reads found in the heterozygous reads.
+5. 25% - the signal strength for the heterozygous variants being in a 1:3 allele ratio.
+6. 33% - the signal strength for the heterozygous variants being in a 1:2 allele ratio.
+7. 50% - the signal strength for the heterozygous variants being in a 1:1 allele ratio.
+8. HetProportion - the proportion of the variants that are heterozygous.
+9. PeakPosition - the allele ratio with the highest signal strength. This is the best estimate of the allele ratio of variants in the area of the alleged CNV.
+10. PeakHeight - the highest signal strength value.
+A region may or may not have sufficient data to evaluate a CNV. This is the purpose of the Variants, Heterozygous, and Reads columns. A region with sufficient data should have at least several heterozygous variants, and ideally at least 1000 reads.
+The data can show the following kinds of results:
+1. Homozygous area or a deletion (or a normal region on the X/Y chromosome in males). This is indicated by the HetProportion column having a very low value. It is not possible to distinguish between a homozygous region and a deleted (monosomy) region.
+2. Normal (disomy) region (or duplication on the X/Y chromosome in males). This is indicated by the HetProportion value being around 0.6 (could vary from 0.3 to 0.8), the 50% value being higher than the 33% or 25% value, and the PeakPosition value being close to 0.5.
+3. Duplicated (trisomy) region. This is indicated by the 33% value being higher than the 50% or 25% value, and the PeakPosition value being close to 0.33. The HetProportion value may vary from 0.3 to 0.9.
+4. Double-duplicated region. This is indicated by the 25% value being higher than the 50% or 33% value, and the PeakPosition value being close to 0.25. The HetProportion value may vary from 0.3 to 0.9.
+5. Contaminated sample. This is indicated by a very high HetProportion, and by a 25% value higher than the 50% or 33% value. The main distinguishing feature of sample contamination is that the whole genome will have these values, rather than just a small alleged CNV. Contamination is better detected by VerifyBamID instead of this software.

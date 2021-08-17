@@ -215,8 +215,39 @@ The output contains multiple rows, one for each match between a cnv_list line an
 A region may or may not have sufficient data to evaluate a CNV. This is the purpose of the Variants, Heterozygous, and Reads columns. A region with sufficient data should have at least several heterozygous variants, and ideally at least 1000 reads.
 
 The data can show the following kinds of results:
-1. Homozygous area or a deletion (or a normal region on the X/Y chromosome in males). This is indicated by the HetProportion column having a very low value. It is not possible to distinguish between a homozygous region and a deleted (monosomy) region.
+1. Homozygous area or a deletion (or a normal region on the X/Y chromosome in males). This is indicated by the HetProportion column having a very low value. It is not possible to distinguish between a homozygous region and a deleted (monosomy) region using this tool. For this, use SavvyCNV or another read-depth CNV detection method instead.
 2. Normal (disomy) region (or duplication on the X/Y chromosome in males). This is indicated by the HetProportion value being around 0.6 (could vary from 0.3 to 0.8), the 50% value being higher than the 33% or 25% value, and the PeakPosition value being close to 0.5.
 3. Duplicated (trisomy) region. This is indicated by the 33% value being higher than the 50% or 25% value, and the PeakPosition value being close to 0.33. The HetProportion value may vary from 0.3 to 0.9.
 4. Double-duplicated region. This is indicated by the 25% value being higher than the 50% or 33% value, and the PeakPosition value being close to 0.25. The HetProportion value may vary from 0.3 to 0.9.
-5. Contaminated sample. This is indicated by a very high HetProportion, and by a 25% value higher than the 50% or 33% value. The main distinguishing feature of sample contamination is that the whole genome will have these values, rather than just a small alleged CNV. Contamination is better detected by VerifyBamID instead of this software.
+5. Contaminated sample. This is indicated by a very high HetProportion, and by a 25% value higher than the 50% or 33% value. The main distinguishing feature of sample contamination is that the whole genome will have these values, rather than just a small alleged CNV. Contamination is better detected by VerifyBamID and analysed using SavvyContaminationFinder instead of this software.
+6. Mosaic UPD. This is indicated by a very low 50% value. At different levels of mosaicism, this can be indistinguishable from a trisomy or double-duplicated region using this tool. The best way to distinguish this is to look at the read depth using SavvyCNV or another read-depth CNV detection method.
+
+### SavvyContaminationFinder
+This software analyses a VCF file containing variants from multiple samples, and determines the level of cross-contamination between samples. This can be used to identify the source of contamination of a sample in order to analyse the root cause of the contamination. See also SavvyContaminationRepairer below, which can correct variants that are incorrectly called because of the cross-contamination.
+
+The software uses the allele depth (AD) information in the VCF file, so multi-sample VCF files produced by GATK GenotypeGVCFs or CombineVariants are suitable. It uses the allele depths for the sample being analysed and the genotypes (derived from allele depths) for the remaining samples in the file to build a model of the mixture of sample contributions to the sample being analysed. It then finds the mixture that best matches the allele depths, using a minimisation algorithm based on preconditioned conjugate gradients. The variants are then corrected based on the calculated contribution from the uncontaminated source sample, and the minimisation repeated, until it converges on a solution. The arguments for the software are:
+1. The VCF file containing variants from multiple samples.
+2. The name of the sample to analyse, or "all" to analyse all of the samples in the file.
+3. (Optional, default: no limit) The maximum mean read depth of a variant to be included in the analysis. For whole genome sequencing, set this to approximately double the mean read depth of your sequencing, and this will filter out variants in collapsed repeat regions and other non-diploid regions. For targeted/exome sequencing, set this to a very high number, as targeted regions may have a high read depth.
+4. (Optional, default: 1) The number of CPU threads to process the data with. This is only useful if argument 2 is "all".
+
+The output contains multiple rows, describing the content of each sample in the VCF file that was analysed. The columns are:
+1. The sample being described.
+2. The sample contributing reads to the sequence data.
+3. The proportion of the sample being described that originated from the sample contributing reads.
+
+Given uncontaminated samples, you should expect each described sample to have a near-zero proportion value for every contributing sample, except of course itself, which should have a proportion value near 1. For a contaminated sample, the contaminating sample will have a proportion value representing the amount of that sample that has been mixed into the contaminated sample, and the contribution from the contaminated sample itself will be less than 1 accordingly.
+
+### SavvyContaminationRepairer
+This software corrects the variants in a VCF file taking account of cross-contamination as detected by SavvyContaminationFinder. The genotypes (GT), genotype quality (GQ) and phred-scale likelihood (PL) fields for each sample are updated with new values. The old GT and PL fields are copied to new OLDGT and OLDPL fields. The software reads the contamination values from the standard input, in the same format as produced by SavvyContaminationFinder. In a contaminated sample, the GQ and PL values will naturally be lower than a contaminated sample, showing the lower confidence in the original genotype. The software takes one or two arguments. They are:
+1. The VCF file containing the contaminated sample data.
+2. (Optional) The output VCF file. If this argument is not provided, then the VCF file will be output on the standard output, and an index cannot be created.
+
+A typical workflow for processing contaminated samples is to run the following:
+```
+java SavvyContaminationFinder contaminated.vcf all >contamination.txt
+java SavvyContaminationRepairer contaminated.vcf decontaminated.vcf <contamination.txt
+```
+This will produce the contamination.txt file which describes the contamination source for each sample, which should be checked to make sure the contamination originates from a sample that is present in the VCF file. It will then produce decontaminated.vcf which has most of the genotypes corrected.
+
+Contamination tends to cause homozygous reference (i.e. no variant present) locations to have a false positive heterozygous variant call, if the contaminant has that variant. It also tends to cause homozygous variant locations to be mis-called as heterozygous, if the contaminant is not also homozygous variant. If a homozygous variant is rare, then this is increasingly likely, meaning that contamination causes the most likely disease-causing variants to be most likely to be mis-called. SavvyContaminationRepairer is effective at correcting both of these faults, correcting 98.5 to 99% of variants in GIAB not-difficult regions at contamination levels between 10% and 20% in tests. Heterozygous variants are less likely to be mis-called due to contamination.

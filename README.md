@@ -73,6 +73,7 @@ In addition, the following arguments can be provided:
   6. Uncorrected normalised read depth
   7. Phred score probability of a deletion in this bin
   8. Phred score probability of a duplication in this bin
++ -headers - Makes SavvyCNV output a header at the top of the CNV list it generates.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome

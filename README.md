@@ -252,3 +252,15 @@ java SavvyContaminationRepairer contaminated.vcf decontaminated.vcf <contaminati
 This will produce the contamination.txt file which describes the contamination source for each sample, which should be checked to make sure the contamination originates from a sample that is present in the VCF file. It will then produce decontaminated.vcf which has most of the genotypes corrected.
 
 Contamination tends to cause homozygous reference (i.e. no variant present) locations to have a false positive heterozygous variant call, if the contaminant has that variant. It also tends to cause homozygous variant locations to be mis-called as heterozygous, if the contaminant is not also homozygous variant. If a homozygous variant is rare, then this is increasingly likely, meaning that contamination causes the most likely disease-causing variants to be most likely to be mis-called. SavvyContaminationRepairer is effective at correcting both of these faults, correcting 98.5 to 99% of variants in GIAB not-difficult regions at contamination levels between 10% and 20% in tests. Heterozygous variants are less likely to be mis-called due to contamination.
+                                                                                       
+### CoverageOffTarget
+This software analyses a set of CoverageBinner files, and determines how many off-target reads there are in them. Firstly, the software scans through the files, and identifies all the 200bp genome chunks that have fewer than a threshold number of reads on average (default 5). Then it prints statistics for each input file. The arguments are:
+1. -threshold <number> to set the threshold number of reads. For each 200bp chunk of the genome, the average number of reads (across all the input samples) is calculated, and a chunk is counted as on-target if it is above this threshold, and off-target if it is below. The default is 5, and it can be a floating point number.
+2. -readLength <number> to tell the software the read length of the samples. This enables the software to calculate the mean read depth in off-target regions.
+All remaining arguments are taken to be input files to process. The software will first print the number of chunks that are on-target, and the proportion of the genome that is, and then for each input sample the following columns:
+1. The name of the CoverageBinner file that contains the data.
+2. The total number of reads in the file.
+3. The number of reads that are in on-target chunks.
+4. The proportion of reads that are in on-target chunks.
+5. The number of reads that are off-target.
+6. The mean read depth in off-target regions. If the -readLength argument is not supplied, then this column is not produced.

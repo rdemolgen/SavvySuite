@@ -49,6 +49,7 @@ public class SavvyCNV
 		int errorType = 0; // 0 means multiply, 1 means add, 2 means poisson.
 		String limitChromosome = null;
 		boolean sampleIsCase = true;
+		boolean includeHeaders = false;
 		for (int i = 0; i < args.length; i++) {
 			if ("-d".equals(args[i])) {
 				i++;
@@ -104,6 +105,8 @@ public class SavvyCNV
 				sampleIsCase = true;
 			} else if ("-control".equals(args[i])) {
 				sampleIsCase = false;
+			} else if ("-headers".equals(args[i])) {
+				includeHeaders = true;
 			} else {
 				samples.add(args[i]);
 				if (sampleIsCase) {
@@ -365,6 +368,13 @@ public class SavvyCNV
 			}
 			pipe.flush();
 		}
+		for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
+			double[] svValues = new double[samples.size()];
+			for (int o = 0; o < samples.size(); o++) {
+				svValues[o] = decomp.getV().getArray()[o][i];
+			}
+			checkNormality(svValues, i, samples);
+		}
 		for (int i = 0; i < svsBlanked; i++) {
 			S.getArray()[i][i] = 0.0;
 		}
@@ -386,7 +396,7 @@ public class SavvyCNV
 			}
 			System.exit(0);
 		}
-			
+
 		double scoreSum[] = new double[samples.size()];
 		double scoreSsum[] = new double[samples.size()];
 		int scoreCount[] = new int[samples.size()];
@@ -425,6 +435,10 @@ public class SavvyCNV
 		System.err.println("Number of low-noise genome chunks: " + validChunks);
 		totalPosVariance = totalPosVariance / validChunks;
 		System.err.println("Average noise: " + Math.sqrt(totalPosVariance));
+		System.err.println("Noise_including_cnvs\tNoise\tDeletion_count\tDuplication_count\tTotal_reads\tSample");
+		if (includeHeaders && (!errorModel)) {
+			System.out.println("chr\tstart\tend\ttype\tinformative_buckets\tcnv_size_buckets\tquality\tquality_per_size\trelative_dosage\tsample");
+		}
 		for (int sampleNo = 0; sampleNo < samples.size(); sampleNo++) {
 			if (caseSamples.contains(samples.get(sampleNo))) {
 				String tempFileName = samples.get(sampleNo) + ".tempFile" + Math.random();
@@ -528,6 +542,98 @@ public class SavvyCNV
 			pipe.close();
 			gnuplot.waitFor();
 		}
+	}
+
+	public static void checkNormality(double[] values, int svNo, List<String> samples) {
+		// Check the distribution of values for normality - do they approximately follow the normal distribution?
+		// This is to try and catch the case where (for example) a singular vector describes mostly the difference
+		// between one single sample and all the rest of the samples, which can happen if that one sample has been
+		// sequenced in a different way to the rest of the samples, or if it has a large enough difference to the
+		// rest of the samples. When this happens, if that singular vector is removed, then that sample will have
+		// all its variation removed, and no CNVs will be called on it. It's also a shameful waste of a singular
+		// vector.
+		// First test - does a limited set of samples account for the majority of the singular vector? Remember
+		// that the sum of squares of the vector is equal to 1.
+		double maxSquare = 0.0;
+		int maxSquareSample = -1;
+		double[] squareValues = new double[values.length];
+		double sum = 0.0;
+		double ssum = 0.0;
+		for (int i = 0; i < values.length; i++) {
+			double squareValue = values[i] * values[i];
+			squareValues[i] = squareValue;
+			if (squareValue > maxSquare) {
+				maxSquare = squareValue;
+				maxSquareSample = i;
+			}
+			sum += values[i];
+			ssum += squareValue;
+		}
+		if (maxSquare > 0.8) {
+			System.err.println("ERROR: Singular vector " + svNo + " disproportionately describes one sample " + maxSquareSample + " \"" + samples.get(maxSquareSample) + "\"");
+			System.err.println("This sample may have been sequenced differently to the other samples.");
+			System.err.println("CNV calling will fail for this sample, and accuracy will be reduced for all samples.");
+		} else {
+			Arrays.sort(squareValues);
+			double cumul = 0.0;
+			int sampleCount = 0;
+			while (cumul < 0.8) {
+				cumul += squareValues[values.length - 1 - sampleCount];
+				sampleCount++;
+			}
+			if (sampleCount < Math.sqrt(values.length)) {
+				System.err.println("ERROR: Singular vector " + svNo + " applies mostly to very few samples (" + sampleCount + " samples have " + cumul + " of the magnitude)");
+				System.err.println("These samples may have been sequenced differently to the other samples.");
+				System.err.println("CNV calling may fail for these samples, and accuracy may be reduced for all samples.");
+			}
+		}
+		// Second test - is the distribution bimodal? Measure the kurtosis.
+		double mean = sum / values.length;
+		double powTwo = 0.0;
+		double powThree = 0.0;
+		double powFour = 0.0;
+		for (int i = 0; i < values.length; i++) {
+			double diff = values[i] - mean;
+			powTwo += diff * diff;
+			powThree += diff * diff * diff;
+			powFour += diff * diff * diff * diff;
+		}
+		powTwo = powTwo / values.length;
+		powThree = powThree / values.length;
+		powFour = powFour / values.length;
+		double kurtosis = powFour / powTwo / powTwo;
+		double skewness = powThree / powTwo / Math.sqrt(powTwo);
+		if (kurtosis < 1.6) {
+			System.err.println("ERROR: Singular vector " + svNo + " has a bimodal/multimodal distribution between samples (kurtosis " + kurtosis + ")");
+			System.err.println("This singular vector is likely describing the difference between two groups of samples that have different read depth patterns.");
+			System.err.println("This may be because they have been sequenced differently, or maybe male and female samples have been sequenced together.");
+			System.err.println("For best results, the two sample groups should be separated before CNV analysis.");
+		}
+		// Third test - is the distribution bimodal? Try to divide it into two separate groups.
+		Arrays.sort(values);
+		double stddev = Math.sqrt((ssum - (sum * sum / values.length)) / values.length);
+		double sum1 = 0.0;
+		double ssum1 = 0.0;
+		double lowest = Double.MAX_VALUE;
+		int lowestI = 0;
+		for (int i = 1; i < values.length; i++) {
+			sum1 += values[i - 1];
+			ssum1 += values[i - 1] * values[i - 1];
+			double stddev1 = Math.sqrt((ssum1 - (sum1 * sum1 / i)) / i);
+			double stddev2 = Math.sqrt(((ssum - ssum1) - ((sum - sum1) * (sum - sum1) / (values.length - i))) / (values.length - i));
+			//System.err.println("twogroup\t" + svNo + "\t" + i + "\t" + ((var1 + var2) / var));
+			if ((stddev1 + stddev2) / stddev < lowest) {
+				lowest = (stddev1 + stddev2) / stddev;
+				lowestI = i;
+			}
+		}
+		if (lowest < 0.7) {
+			System.err.println("ERROR: Singular vector " + svNo + " has a bimodal distribution between samples (groups of " + lowestI + " and " + (values.length - lowestI) + " samples, relative stddev " + lowest + ")");
+			System.err.println("This singular vector is likely describing the difference between two groups of samples that have different read depth patterns.");
+			System.err.println("This may be because they have been sequenced differently, or maybe male and female samples have been sequenced together.");
+			System.err.println("For best results, the two sample groups should be separated before CNV analysis.");
+		}
+		//System.err.println("SV " + svNo + " kurtosis " + kurtosis + ", skewness " + skewness + ", relative stddev " + lowest);
 	}
 
 	public static List<State> viterbi(Map<String, long[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance, double[][] aArray, int errorType, double[][] eArray, PrintWriter dataFile) {

@@ -257,6 +257,7 @@ Contamination tends to cause homozygous reference (i.e. no variant present) loca
 This software analyses a set of CoverageBinner files, and determines how many off-target reads there are in them. Firstly, the software scans through the files, and identifies all the 200bp genome chunks that have fewer than a threshold number of reads on average (default 5). Then it prints statistics for each input file. The arguments are:
 1. -threshold <number> to set the threshold number of reads. For each 200bp chunk of the genome, the average number of reads (across all the input samples) is calculated, and a chunk is counted as on-target if it is above this threshold, and off-target if it is below. The default is 5, and it can be a floating point number.
 2. -readLength <number> to tell the software the read length of the samples. This enables the software to calculate the mean read depth in off-target regions.
+
 All remaining arguments are taken to be input files to process. The software will first print the number of chunks that are on-target, and the proportion of the genome that is, and then for each input sample the following columns:
 1. The name of the CoverageBinner file that contains the data.
 2. The total number of reads in the file.

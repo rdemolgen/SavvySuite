@@ -293,15 +293,15 @@ The software produces one line of output for each event found. Each line is tab-
 5. The number of read pairs that agree with the event in the first BAM file.
 6. The distance between the two ends of the event, of "?" if the two ends are in different chromosomes.
 7. A description of the event. The possible values are:
-  a. Deletion_left_edge
-  b. Deletion_right_edge
-  c. Duplication_left_edge
-  d. Duplication_right_edge
-  e. Inversion_inner_left
-  f. Inversion_inner_right
-  g. Inversion_outer_left
-  h. Inversion_outer_right
-  i. Translocation
+  1. Deletion_left_edge
+  2. Deletion_right_edge
+  3. Duplication_left_edge
+  4. Duplication_right_edge
+  5. Inversion_inner_left
+  6. Inversion_inner_right
+  7. Inversion_outer_left
+  8. Inversion_outer_right
+  9. Translocation
 8. For each BAM file on the command line, two columns are added:
-  a. The number of read pairs found that agree with the event
-  b. The total number of reads in the vicinity of the event
+  1. The number of read pairs found that agree with the event
+  2. The total number of reads in the vicinity of the event

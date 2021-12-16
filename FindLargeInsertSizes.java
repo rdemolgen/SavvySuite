@@ -7,7 +7,7 @@ import java.util.TreeSet;
 import htsjdk.samtools.*;
 
 /**
- * Reads a BAM file and identifies all the read pairs that have an insert size greater than 1,500.
+ * Reads a BAM file and identifies all the read pairs that have an insert size greater than 1,000.
  *
  * @author Matthew Wakeling
  */

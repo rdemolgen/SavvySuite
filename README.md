@@ -272,3 +272,36 @@ All remaining arguments are taken to be input files to process. The software wil
 4. The proportion of reads that are in on-target chunks.
 5. The number of reads that are off-target.
 6. The mean read depth in off-target regions. If the -readLength argument is not supplied, then this column is not produced.
+
+### FindLargeInsertSizes
+This software searches for read pairs in a BAM file that have an abnormal insert size. If multiple abnormal read pairs in the same location agree, this may indicate the presence of a structural variant, such as a CNV, inversion, or translocation. This detection method is reasonably good at detecting small CNVs, although it will not be able to detect CNVs for which there are no abnormal read pairs. This can occur if targeted sequence data is analysed (and therefore the CNV boundaries are not covered), or in WGS data if the CNV boundaries are in two regions of the genome with similar sequences. Small CNVs are hard to detect using read depth methods or variant allele fraction methods, and this read pair method will provide a better sensitivity and specificity. For large CNVs, a read-depth method or variant allele fraction method is able to collect much more evidence than boundary-based methods such as a read pair method like this, or split read methods. Therefore, this software produces many false positives of large CNVs and translocations due to incorrect mapping of reads in repetitive regions in the genome, and these should be interpreted with caution.
+
+This software analyses multiple BAM files. Events will be detected using the first BAM file specified on the command line, and then the statistics for that event are calculated for each of the BAM files, to work out whether the same event is present in each sample. This allows for a more effective method of determining whether events are de novo in a sample for instance, if the proband is specified as the first sample on the command line, and the parents are specified in addition.
+
+The command line arguments are:
+1. -limit (chromosome) (start) (end) - This will limit the analysis to just the specified region of the genome.
+2. -stddev - This will add additional columns to the output, containing information on the standard deviations of the read pair insert sizes.
+3. -maxInsert (number) - This changes the maximum insert size of a read pair for the read pair to be deemed "normal". Read pairs with an insert size greater than this are analysed. The default is 1000bp, but if you know the distribution of insert sizes for your sequence data, you can reduce this to match the very top of the distribution.
+4. -minMq (number) - This sets the minimum mapping quality of reads. All reads with a mapping quality below this number are discarded. The default is 20.
+5. All other arguments are treated as BAM file names. Events are detected in the first BAM file and confirmed in all BAM files.
+
+The software produces one line of output for each event found. Each line is tab-separated with the following columns:
+1. The chromosome:position location of the event as it was found.
+2. "F" or "R" to indicate whether the reads participating in the event at this location are paired in the forward or reverse direction.
+3. The chromosome:position location of the read pairs of the reads in the event - this is an approximation of the position of "other end" of the event.
+4. "F" or "R" to indicate whether the read pairs at the other end of the event are paired in the forward or reverse direction.
+5. The number of read pairs that agree with the event in the first BAM file.
+6. The distance between the two ends of the event, of "?" if the two ends are in different chromosomes.
+7. A description of the event. The possible values are:
+  a. Deletion_left_edge
+  b. Deletion_right_edge
+  c. Duplication_left_edge
+  d. Duplication_right_edge
+  e. Inversion_inner_left
+  f. Inversion_inner_right
+  g. Inversion_outer_left
+  h. Inversion_outer_right
+  i. Translocation
+8. For each BAM file on the command line, two columns are added:
+  a. The number of read pairs found that agree with the event
+  b. The total number of reads in the vicinity of the event

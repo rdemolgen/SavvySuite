@@ -1,6 +1,7 @@
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -69,11 +70,16 @@ public class CoverageOffTarget
 		// Assume that the human genome has about 2864785223 (from GRCh37) mappable bases. Chunk size is 200. Therefore total number of chunks is 14323926
 		int chunksOffTarget = TOTAL_CHUNKS - chunksCovered;
 		System.out.println("Chunks covered >X" + threshold + ": " + chunksCovered + "\tProportion of the genome covered >X" + threshold + ": " + ((1.0 * chunksCovered) / TOTAL_CHUNKS));
+		//System.out.println("Chunks covered <=X" + threshold + ": " + chunksOffTarget + "\tProportion of the genome covered <=X" + threshold + ": " + ((1.0 * chunksOffTarget) / TOTAL_CHUNKS));
 		if (readLength > -1) {
 			System.out.println("Sample\ttotal_reads\treads_in_chunks_>X" + threshold + "\tread_proportion_in_>X" + threshold + "\toff_target_reads\toff_target_read_depth");
 		} else {
 			System.out.println("Sample\ttotal_reads\treads_in_chunks_>X" + threshold + "\tread_proportion_in_>X" + threshold + "\toff_target_reads");
 		}
+		long allSamplesOffTarget = 0L;
+		long allSamplesOnTarget = 0L;
+		ArrayList<Long> sampleOffTargetCounts = new ArrayList<Long>();
+		ArrayList<Long> sampleOnTargetCounts = new ArrayList<Long>();
 		for (String arg : inputFiles) {
 			long totalReads = 0;
 			long targetedReads = 0;
@@ -89,7 +95,28 @@ public class CoverageOffTarget
 					totalReads += toAdd[i];
 				}
 			}
+			allSamplesOffTarget += totalReads - targetedReads;
+			allSamplesOnTarget += targetedReads;
+			sampleOffTargetCounts.add(totalReads - targetedReads);
+			sampleOnTargetCounts.add(targetedReads);
 			System.out.println(arg + "\t" + totalReads + "\t" + targetedReads + "\t" + ((1.0 * targetedReads) / totalReads) + "\t" + (totalReads - targetedReads) + "\t" + (readLength > -1 ? "\t" + ((totalReads - targetedReads) * readLength / 200.0 / chunksOffTarget): ""));
 		}
+		System.err.println("");
+		Collections.sort(sampleOffTargetCounts);
+		System.err.println("Mean number of off-target reads: " + ((allSamplesOffTarget * 1.0) / inputFiles.size()));
+		System.err.println("Median number of off-target reads: " + sampleOffTargetCounts.get(sampleOffTargetCounts.size() / 2));
+		double medianReadCount = (sampleOffTargetCounts.get(sampleOffTargetCounts.size() / 2) * 1.0) / chunksOffTarget;
+		System.err.println("Median number of reads per 200bp chunk in off-target areas: " + medianReadCount);
+		int bestBinSize = (int) (200 * 120 / medianReadCount);
+		System.err.println("Recommended bin size for SavvyCNV for these samples is around " + bestBinSize + " for off-target analysis.");
+		System.err.println("This should allow sufficient reads in each bin. Note that bin size must be a multiple of 200.\n");
+		Collections.sort(sampleOffTargetCounts);
+		System.err.println("Mean number of on-target reads: " + ((allSamplesOnTarget * 1.0) / inputFiles.size()));
+		System.err.println("Median number of on-target reads: " + sampleOnTargetCounts.get(sampleOnTargetCounts.size() / 2));
+		double medianReadCountOnTarget = (sampleOnTargetCounts.get(sampleOnTargetCounts.size() / 2) * 1.0) / chunksCovered;
+		System.err.println("Median number of reads per 200bp chunk in on-target areas: " + medianReadCountOnTarget);
+		int bestBinSizeOnTarget = (int) (200 * 120 / medianReadCountOnTarget);
+		System.err.println("Recommended bin size for SavvyCNV for these samples is around " + bestBinSizeOnTarget + " for on-target analysis.");
+		System.err.println("This should allow sufficient reads in each bin. Note that bin size must be a multiple of 200.");
 	}
 }

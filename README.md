@@ -13,7 +13,7 @@ and if desired, cite this web site too:
 > Wakeling MN. SavvySuite. 2018. https://github.com/rdemolgen/SavvySuite.
 
 ## Running Java
-This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. All operations require this GATK jar and the SavvySuite java to be in the Java classpath, in order for Java to find it.
+This code requires the htsjdk library and the JAMA matrix maths library. The easiest way to get everything required is to download the GATK Jar. Any version of GATK should be fine, including most GATK 3 jars and all GATK 4 jars. All operations require this GATK jar and the SavvySuite java to be in the Java classpath, in order for Java to find it. For GATK 3, use the GenomeAnalysisTK.jar, and for GATK 4, use the gatk-package-version-local.jar file.
 
 This can be done in two ways. The first option is to set the CLASSPATH environment variable:
 ```

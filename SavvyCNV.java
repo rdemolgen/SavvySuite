@@ -107,12 +107,23 @@ public class SavvyCNV
 				sampleIsCase = false;
 			} else if ("-headers".equals(args[i])) {
 				includeHeaders = true;
+			} else if ("-probs".equals(args[i])) {
+				double dosage = Double.parseDouble(args[i+1]);
+				double stddev = Double.parseDouble(args[i+2]);
+				System.out.println("Dosage: " + dosage + ", stddev = " + stddev);
+				System.out.println("Normal probabilities - deletion " + logProbDel(dosage, stddev, minProb, false) + ", duplication " + logProbDup(dosage, stddev, minProb, false));
+				System.out.println("Mosaic probabilities - deletion " + logProbDel(dosage, stddev, minProb, true) + ", duplication " + logProbDup(dosage, stddev, minProb, true));
+				System.exit(0);
 			} else {
 				samples.add(args[i]);
 				if (sampleIsCase) {
 					caseSamples.add(args[i]);
 				}
 			}
+		}
+		if (divider % 200 != 0) {
+			System.err.println("Bin size must be a multiple of 200, currently set to " + divider);
+			System.exit(1);
 		}
 		double logTransProb = log(transitionProb);
 		//System.err.println("Transition probability " + logTransProb);
@@ -122,6 +133,10 @@ public class SavvyCNV
 		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
 		System.err.println("Blanking " + svsBlanked + " singular vectors");
 		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
+		if (limitChromosome != null) {
+			System.err.println("Limiting analysis to chromosome " + limitChromosome);
+		}
+		String fileNameDivider = limitChromosome == null ? ("" + divider) : (divider + "_" + limitChromosome);
 		if (errorType != 0) {
 			System.err.println("Using " + (errorType == 1 ? "additive" : "poisson") + " error model");
 		}
@@ -264,6 +279,17 @@ public class SavvyCNV
 		Jama.Matrix S = decomp.getS();
 		Process gnuplot = null;
 		SplitPrintStream pipe = null;
+		String tempFileName = "." + fileNameDivider + ".tempFile" + Math.random();
+		if (samples.size() <= chunkChromosomes.size()) {
+			for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
+				PrintStream svFile = new PrintStream(new FileOutputStream(samples.get(0) + tempFileName + ".SV_" + i + "_sample.csv"));
+				for (int o = 0; o < samples.size(); o++) {
+					svFile.println(o + "\t" + decomp.getV().getArray()[o][i]);
+				}
+				svFile.flush();
+				svFile.close();
+			}
+		}
 		if (graph) {
 			ProcessBuilder pb = new ProcessBuilder("gnuplot");
 			//pb.redirectError(ProcessBuilder.Redirect.to(new File("/dev/null")));
@@ -272,22 +298,21 @@ public class SavvyCNV
 			pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 			gnuplot = pb.start();
 			PrintStream pipe1 = new PrintStream(gnuplot.getOutputStream());
-			String tempFileName = samples.get(0) + ".tempFile" + Math.random();
-			PrintStream pipe2 = new PrintStream(new FileOutputStream(tempFileName + ".plot"));
+			PrintStream pipe2 = new PrintStream(new FileOutputStream(samples.get(0) + tempFileName + ".plot"));
 			List<PrintStream> streams = new ArrayList<PrintStream>();
 			streams.add(pipe1);
 			streams.add(pipe2);
 			pipe = new SplitPrintStream(streams);
 			pipe.println("set terminal pdf noenhanced" + (fontScale == 1.0 ? "" : " fontscale " + fontScale) + " size " + graphSize);
 			if (samples.size() <= chunkChromosomes.size()) {
-				PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SVs.csv"));
+				PrintStream svFile = new PrintStream(new FileOutputStream(samples.get(0) + tempFileName + ".SVs.csv"));
 				for (int i = 0; i < samples.size(); i++) {
 					svFile.println((i + 1) + "\t" + S.getArray()[i][i]);
 				}
 				svFile.flush();
 				svFile.close();
-				pipe.println("set output \"" + tempFileName + ".SVs.pdf\"");
-				pipe.println("plot '" + tempFileName + ".SVs.csv' using 1:2:($1 - 0.4):($1 + 0.4):(0):2 with boxxy fillstyle solid notitle");
+				pipe.println("set output \"" + samples.get(0) + tempFileName + ".SVs.pdf\"");
+				pipe.println("plot '" + samples.get(0) + tempFileName + ".SVs.csv' using 1:2:($1 - 0.4):($1 + 0.4):(0):2 with boxxy fillstyle solid notitle");
 				pipe.flush();
 			}
 			pipe.println("yo(a) = (a > 13 && a <= 22 ? 27 - a : (a == 23 || a == 24 ? 14 : a))");
@@ -328,7 +353,7 @@ public class SavvyCNV
 			pipe.println("set xtics (\"0\" 0, \"10M\" 10000000, \"20M\" 20000000, \"30M\" 30000000, \"40M\" 40000000, \"50M\" 50000000, \"60M\" 60000000, \"70M\" 70000000, \"80M\" 80000000, \"90M\" 90000000, \"100M\" 100000000, \"110M\" 110000000, \"120M\" 120000000, \"130M\" 130000000, \"140M\" 140000000, \"150M\" 150000000, \"160M\" 160000000, \"170M\" 170000000, \"180M\" 180000000, \"190M\" 190000000, \"200M\" 200000000, \"210M\" 210000000, \"220M\" 220000000, \"230M\" 230000000, \"240M\" 240000000, \"250M\" 250000000)");
 			if (samples.size() <= chunkChromosomes.size()) {
 				for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
-					PrintStream svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_chunk.csv"));
+					PrintStream svFile = new PrintStream(new FileOutputStream(samples.get(0) + tempFileName + ".SV_" + i + "_chunk.csv"));
 					boolean needBlankLine = false;
 					for (String chr : arraysMap.keySet()) {
 						if (needBlankLine) {
@@ -356,14 +381,8 @@ public class SavvyCNV
 					}
 					svFile.flush();
 					svFile.close();
-					svFile = new PrintStream(new FileOutputStream(tempFileName + ".SV_" + i + "_sample.csv"));
-					for (int o = 0; o < samples.size(); o++) {
-						svFile.println(o + "\t" + decomp.getV().getArray()[o][i]);
-					}
-					svFile.flush();
-					svFile.close();
-					pipe.println("set output \"" + tempFileName + ".SV_" + i + ".pdf");
-					pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
+					pipe.println("set output \"" + samples.get(0) + tempFileName + ".SV_" + i + ".pdf");
+					pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(0) + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + samples.get(0) + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
 				}
 			}
 			pipe.flush();
@@ -441,16 +460,15 @@ public class SavvyCNV
 		}
 		for (int sampleNo = 0; sampleNo < samples.size(); sampleNo++) {
 			if (caseSamples.contains(samples.get(sampleNo))) {
-				String tempFileName = samples.get(sampleNo) + ".tempFile" + Math.random();
 				PrintWriter depthFile = null;
 				PrintWriter cnvFile = null;
 				if (graph) {
-					depthFile = new PrintWriter(new BufferedWriter(new FileWriter(tempFileName + ".readDepth")), false);
-					cnvFile = new PrintWriter(new BufferedWriter(new FileWriter(tempFileName + ".cnvs")), false);
+					depthFile = new PrintWriter(new BufferedWriter(new FileWriter(samples.get(sampleNo) + tempFileName + ".readDepth")), false);
+					cnvFile = new PrintWriter(new BufferedWriter(new FileWriter(samples.get(sampleNo) + tempFileName + ".cnvs")), false);
 				}
 				PrintWriter dataFile = null;
 				if (writeData) {
-					dataFile = new PrintWriter(new BufferedWriter(new FileWriter(samples.get(sampleNo) + "." + divider + ".data")), false);
+					dataFile = new PrintWriter(new BufferedWriter(new FileWriter(samples.get(sampleNo) + "." + fileNameDivider + ".data")), false);
 				}
 				double sampleVariance = (scoreSsum[sampleNo] - (scoreSum[sampleNo] * scoreSum[sampleNo] / scoreCount[sampleNo])) / scoreCount[sampleNo];
 				// sampleVariance now contains the variance for this sample, including all the CNVs.
@@ -529,8 +547,8 @@ public class SavvyCNV
 						cnvFile.close();
 						cnvFile = null;
 						if ((delCount > 0) || (dupCount > 0) || allGraphs) {
-							pipe.println("set output \"" + samples.get(sampleNo) + "." + divider + ".cnvs.pdf");
-							pipe.println("plot [* to *] [0.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"1$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) + 0.4 - $4 * 0.6):(yo($1) + 0.4) with boxxy fillstyle solid noborder linecolor rgb \"#FFAAAA\" title \"" + delCount + " Deletion" + (delCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".cnvs | grep \"3$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) - 0.4 + $4 * 0.6) with boxxy fillstyle solid noborder linecolor rgb \"#8888FF\" title \"" + dupCount + " Duplication" + (dupCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + tempFileName + ".readDepth' using ($2 + xo($1)):(yo($1) - min($4, 1.25) * 0.4):(yo($1) + min($4, 1.25) * 0.4) with filledcurves linecolor rgb \"#33AA33\" notitle, '' using ($2 + xo($1)):(yo($1) + (min($3, 2.25) - 1.0) * 0.4) with lines linewidth 2 linecolor rgb \"#000000\" title \"" + samples.get(sampleNo) + "\"");
+							pipe.println("set output \"" + samples.get(sampleNo) + "." + fileNameDivider + ".cnvs.pdf");
+							pipe.println("plot [* to *] [0.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(sampleNo) + tempFileName + ".cnvs | grep \"1$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) + 0.4 - $4 * 0.6):(yo($1) + 0.4) with boxxy fillstyle solid noborder linecolor rgb \"#FFAAAA\" title \"" + delCount + " Deletion" + (delCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(sampleNo) + tempFileName + ".cnvs | grep \"3$\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) - 0.4 + $4 * 0.6) with boxxy fillstyle solid noborder linecolor rgb \"#8888FF\" title \"" + dupCount + " Duplication" + (dupCount == 1 ? "" : "s") + "\", '< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(sampleNo) + tempFileName + ".readDepth' using ($2 + xo($1)):(yo($1) - min($4, 1.25) * 0.4):(yo($1) + min($4, 1.25) * 0.4) with filledcurves linecolor rgb \"#33AA33\" notitle, '' using ($2 + xo($1)):(yo($1) + (min($3, 2.25) - 1.0) * 0.4) with lines linewidth 2 linecolor rgb \"#000000\" title \"" + samples.get(sampleNo) + "\"");
 							pipe.flush();
 						}
 					}
@@ -782,12 +800,15 @@ public class SavvyCNV
 
 	public static double logProbDel(double x, double stddev, double minProb, boolean mosaic) {
 		if (mosaic) {
-			return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) + 8.0)));
+			//return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) + 8.0)));
+			return -(cdf(x - 1.0, stddev) + 8.0);
 		}
 		if (stddev > 1.0 - Math.sqrt(0.5)) {
 			x += stddev + Math.sqrt(0.5) - 1.0;
 		}
-		return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) - cdf(0.5 - x, stddev / Math.sqrt(2.0)))));
+		// Remove probability limit from deletions. They are not likely to be causing false positives, and we would like to detect small deletions.
+		//return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) - cdf(0.5 - x, stddev / Math.sqrt(2.0)))));
+		return -(cdf(x - 1.0, stddev) - cdf(0.5 - x, stddev / Math.sqrt(2.0)));
 	}
 
 	public static double logProbDup(double x, double stddev, double minProb, boolean mosaic) {

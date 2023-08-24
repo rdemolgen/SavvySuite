@@ -4,7 +4,7 @@ Suite of tools for analysing off-target reads to find CNVs, homozygous regions, 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
 
 To cite this software, please use the following references. For SavvyCNV, use:
-> https://www.biorxiv.org/content/10.1101/617605v1
+> https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009940
 
 For all other parts of SavvySuite, cite the ASHG conference presentation:
 > Wakeling, MN, De Franco E, Hattersley AT, Ellard S. Making the most of targeted sequencing: detecting CNVs and homozygous regions using offtarget reads with SavvyCNV. 67th Annual Meeting of the American Society of Human Genetics. Orlando, FL; 17–21 October 2017.

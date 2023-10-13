@@ -31,7 +31,7 @@ public class SavvyCNV
 		Set<String> caseSamples = new HashSet<String>();
 		int divider = 1000000;
 		double cutoff = 0.25;
-		double cutoffV = 5.25;
+		double cutoffV = 0.30;
 		boolean graph = false;
 		boolean allGraphs = false;
 		boolean writeData = false;
@@ -57,6 +57,9 @@ public class SavvyCNV
 			} else if ("-cutoff".equals(args[i])) {
 				i++;
 				cutoff = Double.parseDouble(args[i]);
+			} else if ("-maxNoise".equals(args[i])) {
+				i++;
+				cutoffV = Double.parseDouble(args[i]);
 			} else if ("-trans".equals(args[i])) {
 				i++;
 				transitionProb = Double.parseDouble(args[i]);
@@ -111,8 +114,10 @@ public class SavvyCNV
 				double dosage = Double.parseDouble(args[i+1]);
 				double stddev = Double.parseDouble(args[i+2]);
 				System.out.println("Dosage: " + dosage + ", stddev = " + stddev);
-				System.out.println("Normal probabilities - deletion " + logProbDel(dosage, stddev, minProb, false) + ", duplication " + logProbDup(dosage, stddev, minProb, false));
-				System.out.println("Mosaic probabilities - deletion " + logProbDel(dosage, stddev, minProb, true) + ", duplication " + logProbDup(dosage, stddev, minProb, true));
+				System.out.println("Normal probabilities - deletion " + logProbDel(dosage, stddev, false) + ", duplication " + logProbDup(dosage, stddev, false));
+				System.out.println("limited - deletion " + limitProb(logProbDel(dosage, stddev, false), minProb) + ", duplication " + limitProb(logProbDup(dosage, stddev, false), minProb));
+				System.out.println("Mosaic probabilities - deletion " + logProbDel(dosage, stddev, true) + ", duplication " + logProbDup(dosage, stddev, true));
+				System.out.println("limited - deletion " + limitProb(logProbDel(dosage, stddev, true), minProb) + ", duplication " + limitProb(logProbDup(dosage, stddev, true), minProb));
 				System.exit(0);
 			} else {
 				samples.add(args[i]);
@@ -129,7 +134,8 @@ public class SavvyCNV
 		//System.err.println("Transition probability " + logTransProb);
 		System.err.println("Processing " + samples.size() + " samples");
 		System.err.println("Using divider of " + divider);
-		System.err.println("Using noise cutoff of " + cutoff);
+		System.err.println("Using noise cutoff of " + cutoff + " for measuring noise level of each sample");
+		System.err.println("Using noise cutoff of " + cutoffV + " for CNV calling");
 		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
 		System.err.println("Blanking " + svsBlanked + " singular vectors");
 		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
@@ -587,7 +593,7 @@ public class SavvyCNV
 			sum += values[i];
 			ssum += squareValue;
 		}
-		if (maxSquare > 0.8) {
+		if (maxSquare > Math.sqrt(1.0 / values.length) * 4.0) {
 			System.err.println("ERROR: Singular vector " + svNo + " disproportionately describes one sample " + maxSquareSample + " \"" + samples.get(maxSquareSample) + "\"");
 			System.err.println("This sample may have been sequenced differently to the other samples.");
 			System.err.println("CNV calling will fail for this sample, and accuracy will be reduced for all samples.");
@@ -595,7 +601,7 @@ public class SavvyCNV
 			Arrays.sort(squareValues);
 			double cumul = 0.0;
 			int sampleCount = 0;
-			while (cumul < 0.8) {
+			while (cumul < 0.7) {
 				cumul += squareValues[values.length - 1 - sampleCount];
 				sampleCount++;
 			}
@@ -705,8 +711,8 @@ public class SavvyCNV
 						stddev = 1.0 / Math.sqrt(dEArray[o]);
 					}
 					double val = dArray[o];
-					double newDelProb = logProbDel(val, stddev, minProb, mosaic);
-					double newDupProb = logProbDup(val, stddev, minProb, mosaic);
+					double newDelProb = logProbDel(val, stddev, mosaic);
+					double newDupProb = limitProb(logProbDup(val, stddev, mosaic), minProb);
 					if (graph) {
 						depthFile.println(chr + "\t" + (start * divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
 						depthFile.println(chr + "\t" + (start * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o]);
@@ -798,27 +804,28 @@ public class SavvyCNV
 		return retval;
 	}
 
-	public static double logProbDel(double x, double stddev, double minProb, boolean mosaic) {
+	public static double limitProb(double prob, double minProb) {
+		return log(minProb + 1.0 / (minProb + exp(-prob)));
+	}
+
+	public static double logProbDel(double x, double stddev, boolean mosaic) {
 		if (mosaic) {
-			//return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) + 8.0)));
 			return -(cdf(x - 1.0, stddev) + 8.0);
 		}
 		if (stddev > 1.0 - Math.sqrt(0.5)) {
 			x += stddev + Math.sqrt(0.5) - 1.0;
 		}
-		// Remove probability limit from deletions. They are not likely to be causing false positives, and we would like to detect small deletions.
-		//return log(minProb + 1.0 / (minProb + exp(cdf(x - 1.0, stddev) - cdf(0.5 - x, stddev / Math.sqrt(2.0)))));
 		return -(cdf(x - 1.0, stddev) - cdf(0.5 - x, stddev / Math.sqrt(2.0)));
 	}
 
-	public static double logProbDup(double x, double stddev, double minProb, boolean mosaic) {
+	public static double logProbDup(double x, double stddev, boolean mosaic) {
 		if (mosaic) {
-			return log(minProb + 1.0 / (minProb + exp(cdf(1.0 - x, stddev) + 8.0)));
+			return -(cdf(1.0 - x, stddev) + 8.0);
 		}
 		if (stddev > Math.sqrt(0.5) - 0.5) {
 			x -= stddev - Math.sqrt(0.5) + 0.5;
 		}
-		return log(minProb + 1.0 / (minProb + exp(cdf(1.0 - x, stddev) - cdf(x - 1.5, stddev * Math.sqrt(2.0)))));
+		return -(cdf(1.0 - x, stddev) - cdf(x - 1.5, stddev * Math.sqrt(2.0)));
 	}
 
 	public static double cdf(double x, double stddev) {

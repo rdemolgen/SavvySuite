@@ -54,6 +54,7 @@ The (size) parameter is the size of the chunks that the genome is split into. If
 In addition, the following arguments can be provided:
 + -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
 + -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from the calculation of how noisy a sample is. The default of 0.25 is probably best in most situations.
++ -maxNoise (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from CNV calling. The default of 0.3 is probably best in most situations.
 + -g - Switches on the generation of graphs for all samples that have a detected CNV. The generated graphs will be placed in the same directory as the *.coverageBinner file.
 + -a - The same as ```-g```, but produces a graph for every sample.
 + -cytoBands (file) - The location of a cytoBands file for the genome reference, for example downloadable from http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/cytoBand.txt.gz - this will be plotted in the graph behind the data.

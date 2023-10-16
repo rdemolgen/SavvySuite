@@ -128,8 +128,8 @@ public class SavvyCNVJointCaller
 			double[] newVal = new double[sampleCount];
 			for (int i = 0; i < sampleCount; i++) {
 				if (depths[i] != null) {
-					delProb[i] = SavvyCNV.logProbDel(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
-					dupProb[i] = SavvyCNV.logProbDup(depths[i].getVal(), depths[i].getStddev(), minProb, mosaic);
+					delProb[i] = SavvyCNV.logProbDel(depths[i].getVal(), depths[i].getStddev(), mosaic);
+					dupProb[i] = SavvyCNV.limitProb(SavvyCNV.logProbDup(depths[i].getVal(), depths[i].getStddev(), mosaic), minProb);
 					newVal[i] = depths[i].getVal();
 		//			System.out.print("\t" + delProb[i] + "\t" + dupProb[i]);
 				} else {

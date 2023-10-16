@@ -16,7 +16,7 @@ public class CoverageOffTarget
 	public static final double DEFAULT_THRESHOLD = 5.0;
 	public static final int TOTAL_CHUNKS = 14323926;
 
-	public static void main(String[] args) throws Exception {
+	@SuppressWarnings("unchecked") public static void main(String[] args) throws Exception {
 		double threshold = DEFAULT_THRESHOLD;
 		int readLength = -1;
 		Map<String, long[]> totals = new LinkedHashMap<String, long[]>();

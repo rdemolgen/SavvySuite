@@ -23,7 +23,7 @@ public class SavvyContaminationFinder
 	public static final int[] ITERATION_LIMITS = new int[] {1, 1, 2, 3, 3, 3, 3, 3};
 	public static final double ERROR_RATE = 0.002;
 
-	public static void main(String[] args) throws Exception {
+	@SuppressWarnings("deprecation") public static void main(String[] args) throws Exception {
 		String vcfFile = args[0];
 		String sampleName = args[1];
 		int maxDepth = (args.length > 2 ? Integer.parseInt(args[2]) : Integer.MAX_VALUE);
@@ -136,7 +136,7 @@ public class SavvyContaminationFinder
 			hashCoefficients[i] = rand.nextInt();
 		}
 		int round = 0;
-		for (int repeat = 0; repeat < COST_LIMITS.length; repeat++) {
+		for (int repeat = 0; (repeat < COST_LIMITS.length) && (round < 3000); repeat++) {
 			round++;
 			boolean adjustedHasChanged = false;
 			int adjustedHash = 0;
@@ -152,7 +152,7 @@ public class SavvyContaminationFinder
 						}
 					}
 				}
-				System.err.println(sampleName + ": Most likely contaminant so far is " + sampleNames.get(highestContamSample) + " with contribution " + highestContam);
+				System.err.println(sampleName + ": Most likely contaminant so far is " + (highestContamSample >= 0 ? sampleNames.get(highestContamSample) : "?") + " with contribution " + highestContam);
 
 				//List<Double> costs = new ArrayList<Double>();
 				int[] adjustedVariants = new int[7];

@@ -14,9 +14,11 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipException;
@@ -24,7 +26,7 @@ import java.util.zip.ZipException;
 /**
  * Reads a list of CNVs to validate (such as produced by GenomeStrip2 LCNV pipeline), and calculates the average allele balance parameters for each one, from the VCF files provided.
  * The first argument should be a file containing CNV calls. The first four columns should be chromosome, start, end, and sample name.
- * The second argument should be a genotype file created by PrepareLinkageData.
+ * The second argument should be a list of variants that should be excluded from the analysis. The first two columns should be chromosome and position.
  * The remaining arguments should be vcf file names.
  * The original contents of the file will be output, with four extra columns showing number of variants in the CNV, and the popularity of 25%, 33%, and 50% allele ratio variants.
  * With a heterozygous deletion, all popularities will be low. For a heterozygous duplication, the 33% value will be highest. For a homozygous duplication, the 25% ratio will be highest. For a homozygous deletion, the number of variants will be low.
@@ -35,7 +37,7 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 {
 	public static final Pattern TAB = Pattern.compile("\t");
 
-	public static void main(String[] args) throws IOException, InterruptedException, EOFException, ClassNotFoundException {
+	@SuppressWarnings("deprecation") public static void main(String[] args) throws IOException, InterruptedException, EOFException, ClassNotFoundException {
 		int argNo = 0;
 		int chromColumn = 0;
 		int startColumn = 1;
@@ -50,6 +52,12 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 			endColumn = Integer.parseInt(args[argNo]) - 1;
 			argNo++;
 			sampleNameColumn = Integer.parseInt(args[argNo]) - 1;
+			argNo++;
+		}
+		Set<String> excludeVariants = new HashSet<String>();
+		while ("-exclude".equals(args[argNo])) {
+			argNo++;
+			excludeVariants.add(args[argNo]);
 			argNo++;
 		}
 		Map<String, List<Cnv>> cnvs = new HashMap<String, List<Cnv>>();
@@ -72,11 +80,9 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 		}
 		in.close();
 		String referenceName = args[argNo++];
-		Map<String, Map<Integer, VariantArray>> ref = null;
-		HardyWeinbergLimit hardy = null;
+		Map<String, Set<Integer>> ref = null;
 		if (!("none".equals(referenceName))) {
 			ref = loadReference(referenceName);
-			hardy = new HardyWeinbergLimit(ref.values().iterator().next().values().iterator().next().getSamples().length, 0.0001);
 		}
 		for (; argNo < args.length; argNo++) {
 			String vcfFile = args[argNo];
@@ -103,22 +109,12 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 							VariantContext context = iterator.next();
 							boolean hardyPass = true;
 							if (ref != null) {
-								hardyPass = false;
-								Map<Integer, VariantArray> chrRef = ref.get(context.getChr());
+								Set<Integer> chrRef = ref.get(context.getChr());
 								if (chrRef != null) {
-									VariantArray vArray = chrRef.get(context.getStart());
-									if (vArray != null) {
-										int[] rcounts = new int[3];
-										for (byte b : vArray.getSamples()) {
-											rcounts[b]++;
-										}
-										if ("X".equals(context.getChr()) || hardy.pass(rcounts[0], rcounts[1], rcounts[2])) {
-											hardyPass = true;
-										}
-									}
+									hardyPass = !chrRef.contains(context.getStart());
 								}
 							}
-							if (hardyPass) {
+							if (hardyPass && (!excludeVariants.contains(context.getChr() + ":" + context.getStart()))) {
 								Genotype g = context.getGenotype(sampleName);
 								int[] ad = g.getAD();
 								if ((ad != null) && (!GenotypeType.HOM_REF.equals(g.getType())) && (ad.length == 2) && (ad[0] + ad[1] > 0)) {
@@ -229,33 +225,21 @@ public class ValidateGenomeCnvsUsingAlleleBalance
 		}
 	}
 
-	public static Map<String, Map<Integer, VariantArray>> loadReference(String fileName) throws IOException, ClassNotFoundException {
-		ObjectInputStream vcf = null;
-		try {
-			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(fileName))));
-		} catch (ZipException e) {
-			vcf = new ObjectInputStream(new BufferedInputStream(new FileInputStream(fileName)));
-		}
-		HashMap<String, Map<Integer, VariantArray>> ref = new HashMap<String, Map<Integer, VariantArray>>();
-		boolean hasMoreVariants = true;
-		VariantArray vArray = null;
-		try {
-			vArray = (VariantArray) vcf.readObject();
-		} catch (EOFException e) {
-			hasMoreVariants = false;
-		}
-		while (hasMoreVariants) {
-			Map<Integer, VariantArray> chrRef = ref.get(vArray.getChr());
+	public static Map<String, Set<Integer>> loadReference(String fileName) throws IOException, ClassNotFoundException {
+		Map<String, Set<Integer>> ref = new HashMap<String, Set<Integer>>();
+		BufferedReader in = new BufferedReader(new FileReader(fileName));
+		String line = in.readLine();
+		while (line != null) {
+			String[] split = TAB.split(line);
+			String chr = split[0];
+			Set<Integer> chrRef = ref.get(chr);
 			if (chrRef == null) {
-				chrRef = new HashMap<Integer, VariantArray>();
-				ref.put(vArray.getChr(), chrRef);
+				chrRef = new HashSet<Integer>();
+				ref.put(chr, chrRef);
 			}
-			chrRef.put(vArray.getPosition(), vArray);
-			try {
-				vArray = (VariantArray) vcf.readObject();
-			} catch (EOFException e) {
-				hasMoreVariants = false;
-			}
+			int pos = Integer.parseInt(split[1]);
+			chrRef.add(pos);
+			line = in.readLine();
 		}
 		return ref;
 	}

@@ -99,7 +99,7 @@ public class SavvyVcfHomozygosity
 		}
 	}
 
-	public static void doHomozygosity(String vcfFile, String[] sampleNames, boolean bases, boolean parents, boolean printVariantCounts, Map<String, Set<Integer>> ref) {
+	@SuppressWarnings("deprecation") public static void doHomozygosity(String vcfFile, String[] sampleNames, boolean bases, boolean parents, boolean printVariantCounts, Map<String, Set<Integer>> ref) {
 		int blockSize = (parents ? POT_BLOCK : BLOCK);
 		int maxHet = (parents ? POT_MAXHET : MAXHET);
 		VCFFileReader reader = new VCFFileReader(new File(vcfFile));
@@ -271,7 +271,7 @@ public class SavvyVcfHomozygosity
 		}*/
 	}
 
-	public static Map<String, Set<Integer>> loadReference(String fileName) throws IOException, ClassNotFoundException {
+	@SuppressWarnings("deprecation") public static Map<String, Set<Integer>> loadReference(String fileName) throws IOException, ClassNotFoundException {
 		ObjectInputStream vcf = null;
 		try {
 			vcf = new ObjectInputStream(new BufferedInputStream(new GZIPInputStream(new FileInputStream(fileName))));

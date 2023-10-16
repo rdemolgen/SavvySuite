@@ -21,7 +21,7 @@ public class SavvyContaminationRepairer
 {
 	public static final Pattern TAB = Pattern.compile("\t");
 
-	public static void main(String[] args) throws Exception {
+	@SuppressWarnings("deprecation") public static void main(String[] args) throws Exception {
 		String vcfFile = args[0];
 		String outputFile = (args.length == 2 ? args[1] : null);
 		if (args.length > 2) {

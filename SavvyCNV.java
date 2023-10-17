@@ -721,7 +721,7 @@ public class SavvyCNV
 						dataFile.println(chr + "\t" + (start * divider) + "\t" + (start * divider + divider) + "\t" + val + "\t" + stddev + "\t" + beforeArray[o] + "\t" + newDelProb + "\t" + newDupProb);
 					}
 					needBlankLine = true;
-					if (posVariance[o] < cutoffV * cutoffV) {
+					if (stddev < cutoffV) {
 						double newNorProb = 0.0;
 						double fromDel = delProb + newDelProb;
 						double fromNor = norProb + logTransProb + newDelProb;

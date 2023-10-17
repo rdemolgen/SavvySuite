@@ -23,6 +23,7 @@ public class SavvyCNVJointCaller
 		double transitionProb = 0.00001;
 		double minProb = 0.00000000001;
 		boolean mosaic = false;
+		double cutoffV = 0.30;
 		for (int i = 0; i < args.length; i++) {
 			if ("-trans".equals(args[i])) {
 				i++;
@@ -33,6 +34,9 @@ public class SavvyCNVJointCaller
 			} else if ("-mosaic".equals(args[i])) {
 				mosaic = true;
 				System.err.println("Using mosaic mode");
+			} else if ("-maxNoise".equals(args[i])) {
+				i++;
+				cutoffV = Double.parseDouble(args[i]);
 			} else {
 				samples.add(args[i]);
 			}
@@ -41,15 +45,23 @@ public class SavvyCNVJointCaller
 		//System.err.println("Transition probability " + logTransProb);
 		System.err.println("Processing " + samples.size() + " samples");
 		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
+		System.err.println("Using noise cutoff of " + cutoffV + " for CNV calling");
 
 		TreeSet<Interval<Map<String, ReadDepth>>> data = new TreeSet<Interval<Map<String, ReadDepth>>>();
 		for (String sample : samples) {
-			loadData(data, sample);
+			loadData(data, sample, cutoffV);
 		}
 		viterbi(data, samples, logTransProb, minProb, mosaic);
 	}
 
-	public static void loadData(TreeSet<Interval<Map<String, ReadDepth>>> data, String sample) throws IOException {
+	/**
+	 * Reads data from a .data file produced by SavvyCNV, retaining only the entries where the stddev is less than cutoffV.
+	 *
+	 * @param data the data structure to populate
+	 * @param sample the file name containing the data
+	 * @param cutoffV the maximum stddev
+	 */
+	public static void loadData(TreeSet<Interval<Map<String, ReadDepth>>> data, String sample, double cutoffV) throws IOException {
 		BufferedReader in = new BufferedReader(new FileReader(sample));
 		String line = in.readLine();
 		while (line != null) {
@@ -60,17 +72,19 @@ public class SavvyCNVJointCaller
 				int end = Integer.parseInt(split[2]);
 				double val = Double.parseDouble(split[3]);
 				double stddev = Double.parseDouble(split[4]);
-				Interval<Map<String, ReadDepth>> search = new Interval<Map<String, ReadDepth>>(chr, start, end, null);
-				Interval<Map<String, ReadDepth>> result = data.floor(search);
-				if ((result != null) && chr.equals(result.getChromosome()) && (start == result.getStart())) {
-					if (end != result.getEnd()) {
-						throw new RuntimeException("Divider of multiple samples should be identical.");
+				if (stddev < cutoffV) {
+					Interval<Map<String, ReadDepth>> search = new Interval<Map<String, ReadDepth>>(chr, start, end, null);
+					Interval<Map<String, ReadDepth>> result = data.floor(search);
+					if ((result != null) && chr.equals(result.getChromosome()) && (start == result.getStart())) {
+						if (end != result.getEnd()) {
+							throw new RuntimeException("Divider of multiple samples should be identical.");
+						}
+						result.getData().put(sample, new ReadDepth(val, stddev));
+					} else {
+						Map<String, ReadDepth> map = new HashMap<String, ReadDepth>();
+						map.put(sample, new ReadDepth(val, stddev));
+						data.add(new Interval<Map<String, ReadDepth>>(chr, start, end, map));
 					}
-					result.getData().put(sample, new ReadDepth(val, stddev));
-				} else {
-					Map<String, ReadDepth> map = new HashMap<String, ReadDepth>();
-					map.put(sample, new ReadDepth(val, stddev));
-					data.add(new Interval<Map<String, ReadDepth>>(chr, start, end, map));
 				}
 			}
 			line = in.readLine();

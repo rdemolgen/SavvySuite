@@ -149,6 +149,7 @@ Extra options are:
 + -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
 + -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
++ -maxNoise (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from CNV calling. The default of 0.3 is probably best in most situations.
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome

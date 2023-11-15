@@ -32,8 +32,8 @@ public class CoverageOffTarget
 				String arg = args[argNo];
 				inputFiles.add(arg);
 				System.err.println("Loading file " + arg);
-				ObjectInputStream in = new ObjectInputStream(new FileInputStream(arg));
-				LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
+				CoverageBinner in = new CoverageBinner(arg);
+				LinkedHashMap<String, int[]> vectors = in.getVectors(200);
 				for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
 					int[] toAdd = entry.getValue();
 					long[] total = totals.get(entry.getKey());
@@ -54,7 +54,6 @@ public class CoverageOffTarget
 						total[i] += toAdd[i];
 					}
 				}
-				in.close();
 			}
 		}
 		// Loaded all the files, and stored the total. We can now use this to determine which parts of the genome are targeted.
@@ -83,8 +82,8 @@ public class CoverageOffTarget
 		for (String arg : inputFiles) {
 			long totalReads = 0;
 			long targetedReads = 0;
-			ObjectInputStream in = new ObjectInputStream(new FileInputStream(arg));
-			LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
+			CoverageBinner in = new CoverageBinner(arg);
+			LinkedHashMap<String, int[]> vectors = in.getVectors(200);
 			for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
 				int[] toAdd = entry.getValue();
 				long[] total = totals.get(entry.getKey());

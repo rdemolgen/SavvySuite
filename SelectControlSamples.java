@@ -76,51 +76,50 @@ public class SelectControlSamples
 			List<String> shuffledSamples = new ArrayList<String>(samples);
 			Collections.shuffle(shuffledSamples);
 			long[] totals = new long[subsetCount];
-			Map<String, long[][]> arraysMap = new TreeMap<String, long[][]>();
+			Map<String, int[][]> arraysMap = new TreeMap<String, int[][]>();
+			boolean includeDoubleClip = false;
+			boolean includeSecondary = false;
+			int minMq = -1;
 			for (int i = 0; i < subsetCount; i++) {
 				System.err.println("Reading " + i + " " + shuffledSamples.get(i));
-				ObjectInputStream in = new ObjectInputStream(new FileInputStream(shuffledSamples.get(i)));
-				@SuppressWarnings("unchecked") LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
+				CoverageBinner in = new CoverageBinner(samples.get(i));
+				if (i == 0) {
+					includeDoubleClip = in.getDoubleClipIncluded();
+					includeSecondary = in.getSecondaryIncluded();
+					minMq = in.getMinMq();
+				} else if ((includeDoubleClip != in.getDoubleClipIncluded()) || (includeSecondary != in.getSecondaryIncluded()) || (minMq != in.getMinMq())) {
+					System.err.println("Cannot analyse these samples because the CoverageBinner files were generated with different options so the data is not comparable.");
+					System.err.println("File " + samples.get(0) + " has double-clipped reads " + (includeDoubleClip ? "included" : "excluded") + ", secondary/supplementary reads " + (includeSecondary ? "included" : "excluded") + ", and minimum MQ " + minMq);
+					System.err.println("File " + samples.get(i) + " has double-clipped reads " + (in.getDoubleClipIncluded() ? "included" : "excluded") + ", secondary/supplementary reads " + (in.getSecondaryIncluded() ? "included" : "excluded") + ", and minimum MQ " + in.getMinMq());
+					System.err.println("Note that the defaults options for CoverageBinner have changed - to create files compatible with the old version, please add the -includeDoubleClip option. Alternatively, for higher quality results, regenerate all your CoverageBinner files with the latest CoverageBinner with default options.");
+					System.exit(1);
+				}
+				LinkedHashMap<String, int[]> vectors = in.getVectors(divider);
 				for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
 					String chr = entry.getKey();
 					if ((limitChromosome == null) || limitChromosome.equals(chr)) {
-						int[] toAdd = entry.getValue();
-						long[][] array = arraysMap.get(chr);
+						int[][] array = arraysMap.get(chr);
 						if (array == null) {
-							array = new long[subsetCount][];
+							array = new int[samples.size()][];
 							arraysMap.put(chr, array);
 						}
-						if (array[i] == null) {
-							array[i] = new long[0];
-						}
-						for (int o = 0; o < toAdd.length; o++) {
-							int pos = (o * 200) / divider;
-							if (toAdd[o] > 0) {
-								if (array[i].length <= pos) {
-									long[] newArray = new long[pos + pos / 2 + 1];
-									for (int p = 0; p < array[i].length; p++) {
-										newArray[p] = array[i][p];
-									}
-									array[i] = newArray;
-								}
-								array[i][pos] += toAdd[o];
-								totals[i] += toAdd[o];
-							}
+						array[i] = entry.getValue();
+						for (int o = 0; o < array[i].length; o++) {
+							totals[i] += array[i][o];
 						}
 					}
 				}
-				in.close();
 			}
 			System.err.println("Normalising");
 			int totalPositions = 0;
 			for (String chr : arraysMap.keySet()) {
-				long[][] array = arraysMap.get(chr);
+				int[][] array = arraysMap.get(chr);
 				int longestSample = 0;
 				for (int i = 0; i < subsetCount; i++) {
 					if (array[i] != null) {
 						longestSample = (longestSample > array[i].length ? longestSample : array[i].length);
 					} else {
-						array[i] = new long[0];
+						array[i] = new int[0];
 					}
 				}
 				totalPositions += longestSample;
@@ -136,7 +135,7 @@ public class SelectControlSamples
 			double[] scaleArray = new double[subsetCount];
 			List<Long> totalReadsArray = new ArrayList<Long>();
 			for (String chr : arraysMap.keySet()) {
-				long[][] array = arraysMap.get(chr);
+				int[][] array = arraysMap.get(chr);
 				boolean repeat = true;
 				int start = 0;
 				while (repeat) {
@@ -175,7 +174,7 @@ public class SelectControlSamples
 			for (int o = 0; o < chunkChromosomes.size(); o++) {
 				String chr = chunkChromosomes.get(o);
 				int start = chunkStarts.get(o);
-				long[][] array = arraysMap.get(chr);
+				int[][] array = arraysMap.get(chr);
 				double sum = 0.0;
 				for (int i = 0; i < subsetCount; i++) {
 					sum += (array[i].length > start ? array[i][start] / scaleArray[i] : 0.0);

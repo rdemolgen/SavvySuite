@@ -1,4 +1,7 @@
 # SavvySuite
+
+**Please note** The latest version of CoverageBinner has a breaking change - please see below for details.
+
 Suite of tools for analysing off-target reads to find CNVs, homozygous regions, and shared haplotypes.
 
 This software was written by Matthew Wakeling at the University of Exeter, and was presented at the 2017 ASHG meeting in Orlando, Florida.
@@ -44,7 +47,15 @@ This software analyses the read depth of off-target reads to detect CNVs. It req
 ```
 java -Xmx1g CoverageBinner sample.bam >sample.coverageBinner
 ```
-This step can be performed in parallel on each sample, and will produce a file approximately 7MB in size. The operation requires very little RAM.
+This step can be performed in parallel on each sample, and will produce a file approximately 1MB to 10MB in size. The operation requires very little RAM. There are several configuration options:
+* -d (size) - This changes the level of detail of the data recorded in the output file. By default the genome is divided into chunks of 200bp each, and the number of reads in each chunk is recorded. The "-d (size)" option in SavvyCNV must be a multiple of the size parameter used to produce the CoverageBinner files. You should only use this option if you will only ever use a large bin size in SavvyCNV and you want to have smaller CoverageBinner files.
+* -mmq (number) - This changes the minimum mapping quality for reads. CoverageBinner will reject all reads with a MQ below this number. The default is 30.
+* -R reference.fasta - This tells CoverageBinner where the reference genome FASTA file is. This is only required if you wish to process CRAM files - it is not required for BAM files.
+* -s (sample name) - This writes the given sample name into the CoverageBinner file, instead of the sample name found in the input BAM/CRAM file.
+* -includeDoubleClip - This tells CoverageBinner to include reads that have been clipped on both ends. Such reads tend to be bacterial/viral contamination that is misaligned against the target reference genome, and so it is sensible to exclude them. However, old versions of CoverageBinner did not exclude them, so this option is provided to match the old behaviour.
+* -excludeSecondary - This tells CoverageBinner to exclude secondary/supplementary reads.
+
+**Note breaking change** The old version of CoverageBinner included double-clipped reads while the new version excludes these reads by default. The options used to generate a CoverageBinner file are written into the file metadata, and SavvyCNV will refuse to analyse a mixture of files with different configuration options (except the bin size). Therefore, if you have a mixture of old CoverageBinner files and new CoverageBinner files generated with the default options, then SavvyCNV will refuse to analyse them. Either generate your new CoverageBinner files using the -includeDoubleClip option to maintain backwards-compatibility or delete your old CoverageBinner files and re-generate them using the new CoverageBinner software using default options.
 
 To perform the analysis, the following command should be used:
 ```

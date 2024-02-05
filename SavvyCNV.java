@@ -395,7 +395,11 @@ public class SavvyCNV
 		for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
 			double[] svValues = new double[samples.size()];
 			for (int o = 0; o < samples.size(); o++) {
-				svValues[o] = decomp.getV().getArray()[o][i];
+				if (samples.size() > chunkChromosomes.size()) {
+					svValues[o] = decomp.getU().getArray()[o][i];
+				} else {
+					svValues[o] = decomp.getV().getArray()[o][i];
+				}
 			}
 			checkNormality(svValues, i, samples);
 		}

@@ -354,40 +354,13 @@ public class SelectControlSamples
 	}
 
 	public static double[] calculateSampleVector(int subsetCount, List<String> chunkChromosomes, List<Integer> chunkStarts, List<Long> totalReadsArray, double scale, double[] sumArray, double[][] uInverse, String fileName, String limitChromosome, int divider) throws IOException, ClassNotFoundException {
-		Map<String, long[]> sampleArraysMap = new TreeMap<String, long[]>();
-		ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName));
-		@SuppressWarnings("unchecked") LinkedHashMap<String, int[]> vectors = (LinkedHashMap<String, int[]>) in.readObject();
-		for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
-			String chr = entry.getKey();
-			if ((limitChromosome == null) || limitChromosome.equals(chr)) {
-				int[] toAdd = entry.getValue();
-				long[] array = sampleArraysMap.get(chr);
-				if (array == null) {
-					array = new long[10];
-					sampleArraysMap.put(chr, array);
-				}
-				for (int o = 0; o < toAdd.length; o++) {
-					int pos = (o * 200) / divider;
-					if (toAdd[o] > 0) {
-						if (array.length <= pos) {
-							long[] newArray = new long[pos + pos / 2 + 1];
-							for (int p = 0; p < array.length; p++) {
-								newArray[p] = array[p];
-							}
-							array = newArray;
-							sampleArraysMap.put(chr, array);
-						}
-						array[pos] += toAdd[o];
-					}
-				}
-			}
-		}
-		in.close();
+		CoverageBinner in = new CoverageBinner(fileName);
+		LinkedHashMap<String, int[]> vectors = in.getVectors(divider);
 		double sampleScale = 0.0;
 		for (int o = 0; o < chunkChromosomes.size(); o++) {
 			String chr = chunkChromosomes.get(o);
 			int start = chunkStarts.get(o);
-			long[] array = sampleArraysMap.get(chr);
+			int[] array = vectors.get(chr);
 			if ((array != null) && (array.length > start)) {
 				sampleScale += (1.0 * array[start]) * subsetCount / totalReadsArray.get(o);
 			}
@@ -397,7 +370,7 @@ public class SelectControlSamples
 		for (int o = 0; o < chunkChromosomes.size(); o++) {
 			String chr = chunkChromosomes.get(o);
 			int start = chunkStarts.get(o);
-			long[] array = sampleArraysMap.get(chr);
+			int[] array = vectors.get(chr);
 			sampleAArray[o] = Math.log((((array != null) && (array.length > start)) ? array[start] / sampleScale / sumArray[o] : 0.0) + 0.01);
 		}
 		double[] retval = new double[subsetCount];

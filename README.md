@@ -49,7 +49,7 @@ To call CNVs, the typical workflow is:
 3. Perform noise reduction and individual CNV calling using SavvyCNV.
 4. Perform joint calling with SavvyCNVJointCaller - this is only appropriate if you want to combine the CNV calls for multiple people (for instance different members of a family) into a single CNV call set. Accuracy is improved by calling the CNVs together.
 
-The SavvyCNV set of programs analyses the read depth of off-target reads to detect CNVs. It requires a reasonable number of samples sequenced using the same method. (Don't mix samples sequenced using different methods - it won't work well.) The sample data must be provided in aligned BAM or CRAM files.
+The SavvyCNV set of programs analyses the read depth of off-target reads to detect CNVs. It requires a reasonable number of samples sequenced using the same method. (Don't mix samples sequenced using different methods - it won't work well.) The sample data must be provided in aligned BAM or CRAM files. Note that it is sensible to analyse male and female samples separately, unless you are excluding the X and Y chromosomes from analysis.
 
 Homozygosity and shared haplotype analysis is described separately below.
 

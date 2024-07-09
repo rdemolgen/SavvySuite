@@ -41,9 +41,20 @@ javac *.java
 in the SavvySuite directory.
 
 ## Usage
-This suite contains three separate tools for analysing off-target reads.
-### SavvyCNV
-This software analyses the read depth of off-target reads to detect CNVs. It requires a reasonable number of samples sequenced using the same method. (Don't mix samples sequenced using different methods - it won't work well.) The sample data must be provided in aligned BAM files. First, each BAM file must be converted to a coverage summary file, with the following command:
+This suite contains separate tools for analysing off-target reads.
+
+To call CNVs, the typical workflow is:
+1. Convert the BAM/CRAM files to coverage stats files using CoverageBinner.
+2. Select a subset of those samples to process using SelectControlSamples - note this is only appropriate if you are calling CNVs on *one* sample, but have more than 200 other samples to compare it to.
+3. Perform noise reduction and individual CNV calling using SavvyCNV.
+4. Perform joint calling with SavvyCNVJointCaller - this is only appropriate if you want to combine the CNV calls for multiple people (for instance different members of a family) into a single CNV call set. Accuracy is improved by calling the CNVs together.
+
+The SavvyCNV set of programs analyses the read depth of off-target reads to detect CNVs. It requires a reasonable number of samples sequenced using the same method. (Don't mix samples sequenced using different methods - it won't work well.) The sample data must be provided in aligned BAM or CRAM files.
+
+Homozygosity and shared haplotype analysis is described separately below.
+
+### CoverageBinner
+This software converts reads in a CRAM or BAM file into a summary of the coverage over the genome. The usage is:
 ```
 java -Xmx1g CoverageBinner sample.bam >sample.coverageBinner
 ```
@@ -57,7 +68,8 @@ This step can be performed in parallel on each sample, and will produce a file a
 
 **Note breaking change** The old version of CoverageBinner included double-clipped reads while the new version excludes these reads by default. The options used to generate a CoverageBinner file are written into the file metadata, and SavvyCNV will refuse to analyse a mixture of files with different configuration options (except the bin size). Therefore, if you have a mixture of old CoverageBinner files and new CoverageBinner files generated with the default options, then SavvyCNV will refuse to analyse them. Either generate your new CoverageBinner files using the -includeDoubleClip option to maintain backwards-compatibility or delete your old CoverageBinner files and re-generate them using the new CoverageBinner software using default options.
 
-To perform the analysis, the following command should be used:
+### SavvyCNV
+To perform the CNV analysis, the following command should be used:
 ```
 java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.txt
 ```
@@ -117,7 +129,7 @@ A more detailed description of the command line arguments that control sensitivi
 4. -minProb (phred probability) - This limits how much evidence a single chunk can contribute towards the analysis. If this is set higher than the square of the transition probability, then it will become impossible for a CNV to be detected from the evidence in a single chunk.
 
 ### SelectControlSamples
-This software selects a subset of samples from a larger control pool that match a given sample or set of samples best. This is useful if you have a lot of control samples, but SavvyCNV takes a long time to run with all of them. SavvyCNV uses Singular Vector Decomposition (SVD), which takes time approximately proportional to the number of samples to the power of 2.4, so if for example 150 samples takes 30 minutes, then 300 samples will take a bit more than two and a half hours. SelectControlSamples prepares a statistical summary of a large collection of samples, using SVD on a subset of those samples to identify the read depth patterns, then extending it to the rest of the samples. This summary can then be interrogated to identify the most similar set of samples to a sample that you wish to call CNVs on.
+This software selects a subset of samples from a larger control pool that match a given sample or set of samples best. This is useful if you are trying to call CNVs for a single sample, and you have a lot of control samples, but SavvyCNV takes a long time to run with all of them. SavvyCNV uses Singular Vector Decomposition (SVD), which takes time approximately proportional to the number of samples to the power of 2.4, so if for example 150 samples takes 30 minutes, then 300 samples will take a bit more than two and a half hours. SelectControlSamples prepares a statistical summary of a large collection of samples, using SVD on a subset of those samples to identify the read depth patterns, then extends it to the rest of the samples. This summary can then be interrogated to identify the most similar set of samples to a sample that you wish to call CNVs on.
 
 The software has two modes of operation. The first mode takes a list of CoverageBinner files and produces a summary file, having performed SVD. This operation takes considerable time, but only needs to be performed once. The second mode of operation takes the summary file and a list of CoverageBinner files, and identifies the CoverageBinner files that were used to create the summary that are most similar. This operation is fast. Samples from the summary file that are also specified in this operation are automatically excluded from the output, as it is not sensible to use a sample as its own control when searching for CNVs.
 

@@ -82,7 +82,7 @@ public class SelectControlSamples
 			int minMq = -1;
 			for (int i = 0; i < subsetCount; i++) {
 				System.err.println("Reading " + i + " " + shuffledSamples.get(i));
-				CoverageBinner in = new CoverageBinner(samples.get(i));
+				CoverageBinner in = new CoverageBinner(shuffledSamples.get(i));
 				if (i == 0) {
 					includeDoubleClip = in.getDoubleClipIncluded();
 					includeSecondary = in.getSecondaryIncluded();

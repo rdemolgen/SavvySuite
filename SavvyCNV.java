@@ -750,6 +750,19 @@ public class SavvyCNV
 						stddev = 1.0 / Math.sqrt(dEArray[o]);
 					}
 					double val = dArray[o];
+					if (val < 0.4) {
+						// The normalised read depth is very low. Switch to an alternative way of calculating the error, more suitable for when the read count is low.
+						// Here, dEArray[o] is the expected number of reads, and val * dEArray[o] is the actual number of reads.
+						// p(k, l) = l ** k * exp(-l) / fact(k) where fact(k) = k == 0 ? 1 : k * fact(k - 1)
+						// Given we know k, we need to find the mean l, which is (integrate from 0 to inf (l ^ (k + 1) * exp(-l) / fact(k)) ) / (integrate from 0 to inf (l ^ k * exp(-l) / fact(k)) )
+						// fact(k) is constant so cancels out.
+						// Integration of 0 to inf of x^a * e^(-x) is the gamma function, which for integer a is a!. So the mean l is (k+1)!/k! which is k+1. Nice.
+						// So, the mean l for the expected poisson distribution of the when we have k reads present is k+1, which is also the variance. So, take the sqrt and divide by the expected number of reads.
+						// error = (val * dEArray[o] + 1) / dEArray[o]
+						double newStddev = Math.sqrt(val * dEArray[o] + 1.0) / dEArray[o];
+						// Then, correct according to the difference between error models.
+						stddev = stddev * newStddev * Math.sqrt(dEArray[o]);
+					}
 					double newDelProb = logProbDel(val, stddev, mosaic);
 					double newDupProb = limitProb(logProbDup(val, stddev, mosaic), minProb);
 					if (graph) {

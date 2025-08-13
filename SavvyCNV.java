@@ -50,6 +50,7 @@ public class SavvyCNV
 		String limitChromosome = null;
 		boolean sampleIsCase = true;
 		boolean includeHeaders = false;
+		double homDelFloor = 0.1;
 		for (int i = 0; i < args.length; i++) {
 			if ("-d".equals(args[i])) {
 				i++;
@@ -119,6 +120,9 @@ public class SavvyCNV
 				System.out.println("Mosaic probabilities - deletion " + logProbDel(dosage, stddev, true) + ", duplication " + logProbDup(dosage, stddev, true));
 				System.out.println("limited - deletion " + limitProb(logProbDel(dosage, stddev, true), minProb) + ", duplication " + limitProb(logProbDup(dosage, stddev, true), minProb));
 				System.exit(0);
+			} else if ("-homDelFloor".equals(args[i])) {
+				i++;
+				homDelFloor = Double.parseDouble(args[i]);
 			} else {
 				samples.add(args[i]);
 				if (sampleIsCase) {
@@ -139,6 +143,7 @@ public class SavvyCNV
 		System.err.println("Using transition probability of " + transitionProb + " (phred " + logTransProb + ")");
 		System.err.println("Blanking " + svsBlanked + " singular vectors");
 		System.err.println("Informative genome chunks have an average of " + minReads + " reads or more");
+		System.err.println("Bins with normalised depth less than " + homDelFloor + " will be excluded from SVD");
 		if (limitChromosome != null) {
 			System.err.println("Limiting analysis to chromosome " + limitChromosome);
 		}
@@ -269,7 +274,11 @@ public class SavvyCNV
 			}
 			sum = sum / samples.size();
 			for (int i = 0; i < samples.size(); i++) {
-				aArray[o][i] = Math.log((array[i].length > start ? array[i][start] / scaleArray[i] / sum : 0.0) + 0.01);
+				double v = (array[i].length > start ? array[i][start] / scaleArray[i] / sum : 0.0);
+				if (v < homDelFloor) {
+					v = 1.0;
+				}
+				aArray[o][i] = Math.log(v);
 				eArray[o][i] = scaleArray[i] * sum;
 			}
 		}
@@ -358,6 +367,7 @@ public class SavvyCNV
 			pipe.println("set xtics (\"0\" 0, \"10M\" 10000000, \"20M\" 20000000, \"30M\" 30000000, \"40M\" 40000000, \"50M\" 50000000, \"60M\" 60000000, \"70M\" 70000000, \"80M\" 80000000, \"90M\" 90000000, \"100M\" 100000000, \"110M\" 110000000, \"120M\" 120000000, \"130M\" 130000000, \"140M\" 140000000, \"150M\" 150000000, \"160M\" 160000000, \"170M\" 170000000, \"180M\" 180000000, \"190M\" 190000000, \"200M\" 200000000, \"210M\" 210000000, \"220M\" 220000000, \"230M\" 230000000, \"240M\" 240000000, \"250M\" 250000000)");
 			if (samples.size() <= chunkChromosomes.size()) {
 				for (int i = 0; i < Math.min(svsBlanked * 2, samples.size()); i++) {
+					double maxVal = -1.0;
 					PrintStream svFile = new PrintStream(new FileOutputStream(samples.get(0) + tempFileName + ".SV_" + i + "_chunk.csv"));
 					boolean needBlankLine = false;
 					for (String chr : arraysMap.keySet()) {
@@ -377,6 +387,7 @@ public class SavvyCNV
 									}
 								}
 								double val = decomp.getU().getArray()[o][i];
+								maxVal = Math.max(maxVal, Math.abs(val));
 								svFile.println(chr + "\t" + (start * divider) + "\t" + val);
 								svFile.println(chr + "\t" + (start * divider + divider) + "\t" + val);
 								needBlankLine = true;
@@ -387,7 +398,7 @@ public class SavvyCNV
 					svFile.flush();
 					svFile.close();
 					pipe.println("set output \"" + samples.get(0) + tempFileName + ".SV_" + i + ".pdf");
-					pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(0) + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * 4.0) with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + (i + 1) + "\", '" + samples.get(0) + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
+					pipe.println("plot [* to *] [-2.5 to 14.55] " + (cytoBands == null ? "" : "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/;s/gneg/0/;/acen/d;s/gvar/0/;s/stalk/0/;s/gpos//\" <" + cytoBands + " | grep -v \"_\"' using ($2 + xo($1)):(yo($1)):($2 + xo($1)):($3 + xo($1)):(yo($1) - 0.4):(yo($1) + 0.4):((65536 + 256 + 1) * int(220 - $5/4)) with boxxy fillstyle solid noborder linecolor rgb variable notitle, ") + "'< sed -e \"s/chr//;s/^X/23/;s/^Y/24/\" <" + samples.get(0) + tempFileName + ".SV_" + i + "_chunk.csv' using ($2 + xo($1)):(yo($1) + $3 * " + (0.4 / maxVal) + ") with lines linewidth 2 linecolor rgb \"#000000\" title \"Singular vector " + i + "\", '" + samples.get(0) + tempFileName + ".SV_" + i + "_sample.csv' using 1:($2 * 1.5 - 1.0):($1 - 0.4):($1 + 0.4):(-1):($2 * 1.5 - 1.0) with boxxy axes x2y1 fillstyle solid border -1 notitle");
 				}
 			}
 			pipe.flush();
@@ -401,10 +412,11 @@ public class SavvyCNV
 					svValues[o] = decomp.getV().getArray()[o][i];
 				}
 			}
-			checkNormality(svValues, i, samples);
-		}
-		for (int i = 0; i < svsBlanked; i++) {
-			S.getArray()[i][i] = 0.0;
+			if (!checkNormality(svValues, i, samples)) {
+				if (i < svsBlanked) {
+					S.getArray()[i][i] = 0.0;
+				}
+			}
 		}
 		Jama.Matrix Aprime = decomp.getU().times(S).times(decomp.getV().transpose());
 		//Jama.Matrix Aprime = A;
@@ -412,13 +424,30 @@ public class SavvyCNV
 			Aprime = Aprime.transpose();
 		}
 		double[][] aPrimeArray = Aprime.getArray();
+		for (int o = 0; o < chunkChromosomes.size(); o++) {
+			String chr = chunkChromosomes.get(o);
+			int start = chunkStarts.get(o);
+			int[][] array = arraysMap.get(chr);
+			double sum = 0.0;
+			for (int i = 0; i < samples.size(); i++) {
+				sum += (array[i].length > start ? array[i][start] / scaleArray[i] : 0.0);
+			}
+			sum = sum / samples.size();
+			for (int i = 0; i < samples.size(); i++) {
+				double v = (array[i].length > start ? array[i][start] / scaleArray[i] / sum : 0.0);
+				if (v < homDelFloor) {
+					aPrimeArray[o][i] = Math.log(v);
+					aArray[o][i] = Math.log(v);
+				}
+			}
+		}
 		if (dump) {
 			for (int o = 0; o < chunkChromosomes.size(); o++) {
 				String chunkChr = chunkChromosomes.get(o);
 				int start = chunkStarts.get(o);
 				System.out.print(chunkChr + "\t" + start);
 				for (int i = 0; i < samples.size(); i++) {
-					System.out.print("\t" + (Math.exp(aPrimeArray[o][i]) - 0.01));
+					System.out.print("\t" + Math.exp(aPrimeArray[o][i]));
 				}
 				System.out.println("");
 			}
@@ -435,7 +464,7 @@ public class SavvyCNV
 			// Calculate variance of the normalised corrected read depth at this position. Exclude some of the outliers (say 3% on each side).
 			double[] sortedDepths = new double[samples.size()];
 			for (int i = 0; i < samples.size(); i++) {
-				double val = Math.exp(aPrimeArray[o][i]) - 0.01;
+				double val = Math.exp(aPrimeArray[o][i]);
 				sortedDepths[i] = val;
 			}
 			Arrays.sort(sortedDepths);
@@ -571,7 +600,10 @@ public class SavvyCNV
 		}
 	}
 
-	public static void checkNormality(double[] values, int svNo, List<String> samples) {
+	/**
+	 * Returns true if the SV applies to only one sample, and therefore should not be blanked.
+	 */
+	public static boolean checkNormality(double[] values, int svNo, List<String> samples) {
 		// Check the distribution of values for normality - do they approximately follow the normal distribution?
 		// This is to try and catch the case where (for example) a singular vector describes mostly the difference
 		// between one single sample and all the rest of the samples, which can happen if that one sample has been
@@ -586,6 +618,7 @@ public class SavvyCNV
 		double[] squareValues = new double[values.length];
 		double sum = 0.0;
 		double ssum = 0.0;
+		boolean retval = false;
 		for (int i = 0; i < values.length; i++) {
 			double squareValue = values[i] * values[i];
 			squareValues[i] = squareValue;
@@ -596,15 +629,17 @@ public class SavvyCNV
 			sum += values[i];
 			ssum += squareValue;
 		}
-		if (maxSquare > Math.sqrt(1.0 / values.length) * 4.0) {
-			System.err.println("ERROR: Singular vector " + svNo + " disproportionately describes one sample " + maxSquareSample + " \"" + samples.get(maxSquareSample) + "\"");
+		if (maxSquare > Math.pow(1.0 / values.length, 0.1)) {
+			System.err.println("ERROR: Singular vector " + svNo + " disproportionately describes one sample " + maxSquareSample + " \"" + samples.get(maxSquareSample) + "\" (" + maxSquare + " of the magnitude)");
 			System.err.println("This sample may have been sequenced differently to the other samples.");
-			System.err.println("CNV calling will fail for this sample, and accuracy will be reduced for all samples.");
+			//System.err.println("CNV calling will fail for this sample, and accuracy will be reduced for all samples.");
+			System.err.println("This singular vector will not be removed from the data, which may allow some CNV calling to occur, but treat the results with caution.");
+			retval = true;
 		} else {
 			Arrays.sort(squareValues);
 			double cumul = 0.0;
 			int sampleCount = 0;
-			while (cumul < 0.7) {
+			while (cumul < 0.8) {
 				cumul += squareValues[values.length - 1 - sampleCount];
 				sampleCount++;
 			}
@@ -654,13 +689,14 @@ public class SavvyCNV
 				lowestI = i;
 			}
 		}
-		if (lowest < 0.7) {
+		if ((lowest < 0.7) && (lowestI > 2) && (values.length - lowestI > 2)) {
 			System.err.println("ERROR: Singular vector " + svNo + " has a bimodal distribution between samples (groups of " + lowestI + " and " + (values.length - lowestI) + " samples, relative stddev " + lowest + ")");
 			System.err.println("This singular vector is likely describing the difference between two groups of samples that have different read depth patterns.");
 			System.err.println("This may be because they have been sequenced differently, or maybe male and female samples have been sequenced together.");
 			System.err.println("For best results, the two sample groups should be separated before CNV analysis.");
 		}
 		//System.err.println("SV " + svNo + " kurtosis " + kurtosis + ", skewness " + skewness + ", relative stddev " + lowest);
+		return retval;
 	}
 
 	public static List<State> viterbi(Map<String, int[][]> arraysMap, boolean graph, PrintWriter depthFile, PrintWriter cnvFile, double[] posVariance, double[][] aPrimeArray, int divider, double logTransProb, double minProb, int sampleNo, double sampleVariance, List<String> chunkChromosomes, List<Integer> chunkStarts, double cutoffV, boolean mosaic, double totalPosVariance, double[][] aArray, int errorType, double[][] eArray, PrintWriter dataFile) {
@@ -669,8 +705,8 @@ public class SavvyCNV
 		double[] beforeArray = new double[aArray.length];
 		double[] dEArray = new double[eArray.length];
 		for (int i = 0; i < aPrimeArray.length; i++) {
-			dArray[i] = Math.exp(aPrimeArray[i][sampleNo]) - 0.01;
-			beforeArray[i] = Math.exp(aArray[i][sampleNo]) - 0.01;
+			dArray[i] = Math.exp(aPrimeArray[i][sampleNo]);
+			beforeArray[i] = Math.exp(aArray[i][sampleNo]);
 			dEArray[i] = eArray[i][sampleNo];
 		}
 		List<State> retval = new ArrayList<State>();

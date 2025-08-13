@@ -86,6 +86,7 @@ In addition, the following arguments can be provided:
 + -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed. The default is 20.
 + -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
 + -chr (chromosome name) - This limits the analysis to just one chromosome - all reads outside that chromosome will be discarded.
++ -homDelFloor (number) - Bins with a normalised depth lower than this (default 0.1) will be excluded from the SVD noise cancellation, and then the original value put back in, to avoid the SVD falsely cancelling out the signal of homozygous deletions.
 + -case - All samples listed after this option (until a -control option) are marked as case samples, and CNV calling will be performed on them. This is the default.
 + -control - All samples listed after this option (until a -case option) are marked as control samples, and CNV calling will not be performed on them.
 + -data - An additional file will be created for all case samples, which contains the raw data that SavvyCNV used to call CNVs. The output file is named after the input CoverageBinner file, with ".<bin_size>.data" appended. The file contains 8 columns, which are:

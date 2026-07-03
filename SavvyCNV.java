@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 
 /**
  * Reads a set of CoverageBinner files, and uses a Hidden Markov Model to find copy number variants.
@@ -48,6 +49,7 @@ public class SavvyCNV
 		int minReads = 20;
 		int errorType = 0; // 0 means multiply, 1 means add, 2 means poisson.
 		String limitChromosome = null;
+		Pattern chrPattern = Pattern.compile("^chr[0-9]*$|^chr[XY]$|^[0-9]*$|^[XY]$");
 		boolean sampleIsCase = true;
 		boolean includeHeaders = false;
 		double homDelFloor = 0.1;
@@ -63,7 +65,12 @@ public class SavvyCNV
 				cutoffV = Double.parseDouble(args[i]);
 			} else if ("-trans".equals(args[i])) {
 				i++;
-				transitionProb = Double.parseDouble(args[i]);
+				double prob = Double.parseDouble(args[i]);
+				if (prob >= 1.0) {
+					transitionProb = exp(-prob);
+				} else {
+					transitionProb = prob;
+				}
 			} else if ("-g".equals(args[i])) {
 				graph = true;
 			} else if ("-a".equals(args[i])) {
@@ -74,7 +81,12 @@ public class SavvyCNV
 				cytoBands = args[i];
 			} else if ("-minProb".equals(args[i])) {
 				i++;
-				minProb = exp(-Double.parseDouble(args[i]));
+				double prob = Double.parseDouble(args[i]);
+				if (prob >= 1.0) {
+					minProb = exp(-prob);
+				} else {
+					minProb = prob;
+				}
 			} else if ("-dump".equals(args[i])) {
 				dump = true;
 			} else if ("-errorModel".equals(args[i])) {
@@ -123,6 +135,11 @@ public class SavvyCNV
 			} else if ("-homDelFloor".equals(args[i])) {
 				i++;
 				homDelFloor = Double.parseDouble(args[i]);
+			} else if ("-female".equals(args[i])) {
+				chrPattern = Pattern.compile("^chr[0-9]*$|^chrX$|^[0-9]*$|^X$");
+			} else if ("-chrRegex".equals(args[i])) {
+				i++;
+				chrPattern = Pattern.compile(args[i]);
 			} else {
 				samples.add(args[i]);
 				if (sampleIsCase) {
@@ -146,6 +163,8 @@ public class SavvyCNV
 		System.err.println("Bins with normalised depth less than " + homDelFloor + " will be excluded from SVD");
 		if (limitChromosome != null) {
 			System.err.println("Limiting analysis to chromosome " + limitChromosome);
+		} else {
+			System.err.println("Chromosome selection regex \"" + chrPattern + "\"");
 		}
 		String fileNameDivider = limitChromosome == null ? ("" + divider) : (divider + "_" + limitChromosome);
 		if (errorType != 0) {
@@ -182,7 +201,7 @@ public class SavvyCNV
 			LinkedHashMap<String, int[]> vectors = in.getVectors(divider);
 			for (Map.Entry<String, int[]> entry : vectors.entrySet()) {
 				String chr = entry.getKey();
-				if ((limitChromosome == null) || limitChromosome.equals(chr)) {
+				if ((limitChromosome == null) ? chrPattern.matcher(chr).matches() : limitChromosome.equals(chr)) {
 					int[][] array = arraysMap.get(chr);
 					if (array == null) {
 						array = new int[samples.size()][];

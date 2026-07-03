@@ -75,7 +75,7 @@ java -Xmx30g SavvyCNV -d (size) *.coverageBinner >cnv_list.csv 2>log_messages.tx
 ```
 The (size) parameter is the size of the chunks that the genome is split into. If you have targeted sequencing with three million reads and about 50% off target reads, then a chunk size of 200,000 is appropriate. It is sensible to process male and female samples separately if CNVs in the X/Y chromosomes are to be detected. If you have a lot of samples and SavvyCNV takes a long time, then please use the SelectControlSamples software described below.
 In addition, the following arguments can be provided:
-+ -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter.
++ -trans (transition probability) - This is the transition probability to use for the Viterbi algorithm. The default is 0.00001. To increase the sensitivity and false positive rate, increase this parameter. This option will accept a straight probability value (0.00001) or a phred scale value (40 means the same thing). The input will be interpreted as a phred scale number if it is above 1.
 + -cutoff (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from the calculation of how noisy a sample is. The default of 0.25 is probably best in most situations.
 + -maxNoise (noise cutoff) - This is the noise threshold above which a chunk of the genome will be excluded from CNV calling. The default of 0.3 is probably best in most situations.
 + -g - Switches on the generation of graphs for all samples that have a detected CNV. The generated graphs will be placed in the same directory as the *.coverageBinner file.
@@ -84,7 +84,7 @@ In addition, the following arguments can be provided:
 + -mosaic - Switches the software into mosaic mode. Normally, the state probability calculations assume that the relative dosage is either <=0.5, 1, or >=1.5. Dosage levels must cross the mid-point between 1 and 0.5 or 1.5 before they become evidence of a CNV. This increases sensitivity and specificity at the cost of being able to detect mosaic CNVs. With this switch, mosaics can be detected. The size parameter will need to be increased, and small CNVs will not be detected as effectively.
 + -sv (number) - This changes the number of singular vectors that are removed for noise reduction. The default is 5. This must be less than the number of samples.
 + -minReads (number) - This sets the minimum number of reads that a genome chunk must have on average across the samples in order to be analysed. The default is 20.
-+ -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. The number is a phred score. This is the largest quality score that a very small CNV can have.
++ -minProb (number) - This sets the greatest (lowest) probability that a single chunk can contribute to a CNV. This is the largest quality score that a very small CNV duplication can have. The input value is interpreted as either a straight probability or a phred scale probability (see -trans for details). This limit only applies to duplications - deletions have no limit on signal strength.
 + -chr (chromosome name) - This limits the analysis to just one chromosome - all reads outside that chromosome will be discarded.
 + -homDelFloor (number) - Bins with a normalised depth lower than this (default 0.1) will be excluded from the SVD noise cancellation, and then the original value put back in, to avoid the SVD falsely cancelling out the signal of homozygous deletions.
 + -case - All samples listed after this option (until a -control option) are marked as case samples, and CNV calling will be performed on them. This is the default.
@@ -99,6 +99,8 @@ In addition, the following arguments can be provided:
   7. Phred score probability of a deletion in this bin
   8. Phred score probability of a duplication in this bin
 + -headers - Makes SavvyCNV output a header at the top of the CNV list it generates.
++ -chrRegex (regex) - changes the regular expression that is used to select which chromosomes to analyse. By default it is "^chr[0-9]*$|^chr[XY]$|^[0-9]*$|^[XY]$".
++ -female - Excludes the Y chromosome from analysis. Equivalent to -chrRegex "^chr[0-9]*$|^chrX$|^[0-9]*$|^X$".
 
 The output cnv_list.csv contains a tab-separated list of detected CNVs. The columns in the output are:
 1. Chromosome
